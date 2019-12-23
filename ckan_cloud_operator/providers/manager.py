@@ -295,6 +295,7 @@ def _get_submodule_ids_provider_or_provider_ids(submodule=None, provider_id=None
         from ckan_cloud_operator.providers.cluster.gcloud.constants import PROVIDER_ID as cluster_gcloud_provider_id
         from ckan_cloud_operator.providers.cluster.aws.constants import PROVIDER_ID as cluster_aws_provider_id
         from ckan_cloud_operator.providers.cluster.minikube.constants import PROVIDER_ID as cluster_minikube_provider_id
+        from ckan_cloud_operator.providers.cluster.kamatera.constants import PROVIDER_ID as cluster_kamatera_provider_id
 
         if not provider_id:
             return [cluster_gcloud_provider_id, cluster_aws_provider_id]
@@ -319,6 +320,13 @@ def _get_submodule_ids_provider_or_provider_ids(submodule=None, provider_id=None
             from ckan_cloud_operator.providers.cluster.minikube import manager as cluster_minikube_manager
 
             return cluster_minikube_manager
+
+        ## kamatera
+
+        elif provider_id == cluster_kamatera_provider_id:
+            from ckan_cloud_operator.providers.cluster.kamatera import manager as cluster_kamatera_manager
+
+            return cluster_kamatera_manager
 
     ## storage
 

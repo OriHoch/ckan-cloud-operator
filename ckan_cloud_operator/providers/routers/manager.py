@@ -5,11 +5,16 @@ from ckan_cloud_operator.providers.cluster import manager as cluster_manager
 
 
 def initialize(interactive=False):
+    logs.info('env-id is a single character identified of hte environment')
+    logs.info('.e.g p for production, s for staging, d for development')
+    default_dns_provider = {
+        'aws': 'route53',
+    }.get(cluster_manager.get_provider_id(), 'cloudflare')
     config_manager.interactive_set(
         {
             'env-id': None,
             'default-root-domain': None,
-            'dns-provider': 'route53' if cluster_manager.get_provider_id() == 'aws' else None
+            'dns-provider': default_dns_provider
         },
         configmap_name='routers-config',
         interactive=interactive
@@ -17,27 +22,54 @@ def initialize(interactive=False):
     dns_provider = config_manager.get(key='dns-provider', configmap_name='routers-config')
     logs.info(dns_provider=dns_provider)
     if dns_provider == 'cloudflare':
-        config_manager.interactive_set(
-            {
-                'cloudflare-email': None,
-                'cloudflare-api-key': None
-            },
-            configmap_name='routers-config',
-            interactive=interactive
-        )
+        if cluster_manager.get_provider_id() == 'kamatera':
+            cloudflare_api_key = config_manager.get(
+                'CloudflareApiKey',
+                secret_name='cco-kamatera-management-server',
+                namespace='ckan-cloud-operator',
+                required=True
+            )
+            cloudflare_email = config_manager.get(
+                'CloudflareEmail',
+                secret_name='cco-kamatera-management-server',
+                namespace='ckan-cloud-operator',
+                required=True
+            )
+            config_manager.set(values={
+                'cloudflare-email': cloudflare_email,
+                'cloudflare-api-key': cloudflare_api_key
+            }, secret_name='routers-secrets')
+        else:
+            config_manager.interactive_set(
+                {
+                    'cloudflare-email': None,
+                    'cloudflare-api-key': None
+                },
+                secret_name='routers-secrets',
+                interactive=interactive
+            )
     routers_manager.install_crds()
     infra_router_name = routers_manager.get_default_infra_router_name()
     default_root_domain = config_manager.get('default-root-domain', configmap_name='routers-config', required=True)
-    logs.info('Creating infra router', infra_router_name=infra_router_name, default_root_domain=default_root_domain)
-    routers_manager.create(
-        infra_router_name,
-        routers_manager.get_traefik_router_spec(
+    router_type = {
+        'kamatera': 'nginx'
+    }.get(cluster_manager.get_provider_id(), 'traefik')
+    logs.info('Creating infra router', infra_router_name=infra_router_name, default_root_domain=default_root_domain, router_type=router_type)
+    if router_type == 'traefik':
+        router_spec = routers_manager.get_traefik_router_spec(
             default_root_domain,
-            config_manager.get('cloudflare-email', configmap_name='routers-config', required=False, default=None),
-            config_manager.get('cloudflare-api-key', configmap_name='routers-config', required=False, default=None),
+            config_manager.get('cloudflare-email', secret_name='routers-secrets', required=False, default=None),
+            config_manager.get('cloudflare-api-key', secret_name='routers-secrets', required=False, default=None),
             dns_provider=dns_provider
         )
-    )
+    else:
+        router_spec = routers_manager.get_nginx_router_spec(
+            default_root_domain,
+            config_manager.get('cloudflare-email', secret_name='routers-secrets', required=False, default=None),
+            config_manager.get('cloudflare-api-key', secret_name='routers-secrets', required=False, default=None),
+            dns_provider=dns_provider
+        )
+    routers_manager.create(infra_router_name, router_spec)
 
 
 def get_env_id():

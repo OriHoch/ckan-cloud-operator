@@ -4,6 +4,10 @@
 * Contributions of any kind are welcome.
 * Please search for issues in this repository and [across the different CKAN Cloud repositories](https://github.com/search?q=repo%3Adatopian%2Fckan-cloud-docker+repo%3Adatopian%2Fckan-cloud-helm+repo%3Adatopian%2Fckan-cloud-cluster&type=Issues)
 
+## Local development
+
+You should follow the README section "Run ckan-cloud-operator locally"
+
 ## Continuous Deployment
 
 Travis builds and pushes a docker image on every push.

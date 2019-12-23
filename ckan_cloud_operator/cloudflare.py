@@ -43,7 +43,7 @@ def update_a_record(auth_email, auth_key, zone_name, record_name, target_ip):
 
 
 def curl(auth_email, auth_key, urlpart, data=None, method='GET'):
-    logs.info(f'Running Cloudflare curl: {urlpart} {data} {method}')
+    logs.info(f'Running Cloudflare curl: urlpart={urlpart} data={data} method={method}')
     logs.debug(f'{auth_email} / {auth_key}')
     cmd = ['curl', '-s', '-X', method, f'https://api.cloudflare.com/client/v4/{urlpart}']
     cmd += [

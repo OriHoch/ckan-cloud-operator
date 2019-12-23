@@ -13,6 +13,15 @@ from .solrcloud.constants import PROVIDER_ID as solrcloud_provider_id
 
 
 def initialize(interactive=False, dry_run=False):
+    solr_skip = config_manager.interactive_set(
+        {
+            'skip-solr': False
+        },
+        secret_name='solr-skip',
+        interactive=interactive
+    )
+    if solr_skip['skip-solr'] == 'y':
+        return
     ckan_infra = CkanInfra(required=False)
     solr_config = config_manager.interactive_set(
         {

@@ -17,7 +17,7 @@ usage() {
     echo "    Build a ckan-cloud-operator image from current working directory and tag as latest image which"
     echo "    used by the installed environments"
     echo
-    echo "  add <ENVIRONMENT_NAME> <PATH_TO_KUBECONFIG_FILE> [--build | --dev] [DOCKER_RUN_ARGS..]"
+    echo "  add <ENVIRONMENT_NAME> <PATH_TO_KUBECONFIG_FILE> [--build | --dev | IMAGE_NAME] [DOCKER_RUN_ARGS..]"
     echo "    Add a ckan-cloud-operator executable at /usr/local/bin/ckan-cloud-operator-<ENVIRONMENT_NAME>"
     echo "    which runs using the ckan-cloud-operator Docker image"
     echo "    To use with Minikube set PATH_TO_KUBECONFIG_FILE to 'minikube'"
@@ -48,8 +48,8 @@ check_configmap() {
 
 if [ "${1}" == "pull" ]; then
     if [ "${2}" == "latest" ]; then
-        docker pull viderum/ckan-cloud-operator:latest >/dev/stderr &&\
-        docker tag viderum/ckan-cloud-operator:latest ckan-cloud-operator &&\
+        docker pull orihoch/ckan-cloud-operator:latest >/dev/stderr &&\
+        docker tag orihoch/ckan-cloud-operator:latest ckan-cloud-operator &&\
         exit 0
     elif [ "${2}" != "" ]; then
         IMAGE=$(kubectl -n ckan-cloud get configmap operator-conf -o jsonpath={.data.ckan-cloud-operator-image})

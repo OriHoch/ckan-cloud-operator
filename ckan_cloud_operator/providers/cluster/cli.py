@@ -7,6 +7,7 @@ from ckan_cloud_operator.providers.cluster import manager
 from ckan_cloud_operator.labels import manager as labels_manager
 
 from .aws.cli import aws as aws_cli
+from .kamatera.cli import kamatera as kamatera_cli
 
 
 @click.group()
@@ -16,15 +17,18 @@ def cluster():
 
 
 cluster.add_command(aws_cli)
+cluster.add_command(kamatera_cli)
 
 
 @cluster.command()
 @click.option('--interactive', is_flag=True)
 @click.option('--cluster-provider', default='gcloud')
+@click.option('--operator-image')
 @click.option('--skip-to')
-def initialize(interactive, cluster_provider, skip_to):
+def initialize(interactive, cluster_provider, operator_image, skip_to):
     """Initialize the currently connected cluster"""
-    manager.initialize(interactive=interactive, default_cluster_provider=cluster_provider, skip_to=skip_to)
+    manager.initialize(interactive=interactive, default_cluster_provider=cluster_provider, skip_to=skip_to,
+                       operator_image=operator_image)
     logs.exit_great_success()
 
 

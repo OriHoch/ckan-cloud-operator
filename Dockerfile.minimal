@@ -9,3 +9,6 @@ COPY *.sh *.py /usr/src/ckan-cloud-operator/
 RUN python3 -m pip install psycopg2 pyyaml kubernetes click toml requests
 RUN python3 -m pip install -e /usr/src/ckan-cloud-operator
 ENTRYPOINT ["ckan-cloud-operator"]
+
+ARG CKAN_CLOUD_OPERATOR_IMAGE_TAG=latest
+RUN echo "${CKAN_CLOUD_OPERATOR_IMAGE_TAG}" > /etc/CKAN_CLOUD_OPERATOR_IMAGE_TAG
