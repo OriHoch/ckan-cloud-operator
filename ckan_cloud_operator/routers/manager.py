@@ -5,7 +5,7 @@ from ckan_cloud_operator import kubectl
 from ckan_cloud_operator import logs
 from ckan_cloud_operator.routers.annotations import CkanRoutersAnnotations
 from ckan_cloud_operator.routers.traefik import manager as traefik_manager
-from ckan_cloud_operator.routers.traefik import manager as nginx_manager
+from ckan_cloud_operator.routers.nginx import manager as nginx_manager
 from ckan_cloud_operator.routers.routes import manager as routes_manager
 from ckan_cloud_operator.providers.routers.manager import get_env_id, get_default_root_domain
 

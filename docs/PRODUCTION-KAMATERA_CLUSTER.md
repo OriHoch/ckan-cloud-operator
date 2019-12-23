@@ -37,6 +37,14 @@ From the Kamatera console web-ui:
 The management server will run some central components such as Rancher, Jenkins workloads, load balancer and NFS for storage.
 The components can be separated later to different servers if needed.
 
+Pull the Docker image to create the server:
+
+```
+docker pull orihoch/ckan-cloud-operator-minimal
+```
+
+(Alternatively - build the image from checkout of ckan-cloud-operator: `docker build -t orihoch/ckan-cloud-operator-minimal -f Dockerfile.minimal .`)
+
 The following ckan-cloud-operator command will start interactive creation of the management server,
 follow the instructions on the terminal,
 the whole process takes ~15 minutes:
@@ -112,8 +120,11 @@ Get cluster info:
 ckan-cloud-operator cluster info
 ```
 
+Initialize the cluster:
 
-
+```
+ckan-cloud-operator cluster initialize --interactive --cluster-provider kamatera --operator-image orihoch/ckan-cloud-operator:latest
+```
 
 Start a bash shell to run commands from an operator environment:
 
@@ -121,43 +132,121 @@ Start a bash shell to run commands from an operator environment:
 ckan-cloud-operator bash
 ```
 
-Enable Bash completion:
-
-```
-eval "$(ckan-cloud-operator bash-completion)"
-```
-
-Use Bash completion:
-
-```
-ckan-cloud-operator <TAB><TAB>
-```
-
-Use available binaries:
+Use kubectl:
 
 ```
 kubectl get nodes
 ``` 
 
-```
-curl -s https://raw.githubusercontent.com/OriHoch/ckan-cloud-operator/master/ckan-cloud-operator-env.sh \
-| sudo tee /usr/local/bin/ckan-cloud-operator-env >/dev/null && sudo chmod +x /usr/local/bin/ckan-cloud-operator-env
-```
-Add an environment (sudo is required to install the executable):
-sudo ckan-cloud-operator-env add my-environment /path/to/kubeconfig
-Verify that you are connected to the right cluster
-ckan-cloud-operator cluster info
-
-
-
-Build the ckan-cloud-operator minimal Dockerfile:
+## Initialize NFS storage
 
 ```
-docker build -t ckan-cloud-operator-minimal -f Dockerfile.minimal .
+ckan-cloud-operator storage initialize --interactive --provider-id kamatera-nfs
 ```
 
-Start a shell session using the image:
+## Initialize Private Docker Registry
 
 ```
-docker run -it ckan-cloud-operator-minimal cluster initialize --interactive --cluster-provider kamatera
+ckan-cloud-operator cluster kamatera initialize-docker-registry
+```
+
+## Secure NodePorts
+
+We will be using Node Ports to expose services, to secure this setup, we will restrict Node Ports to only be accessible on the internal network
+
+* Rancher web UI > Edit Cluster > Edit as yaml
+* At the bottom of the file, set the following for kubeproxy:
+
+```
+kubeproxy:
+      extra_args:
+        nodeport-addresses: 172.16.0.0/23
+```
+
+* Save and wait for cluster to update
+
+## Management Server Firewall
+
+We will setup a simple firewall on the management server
+
+SSH to the management server:
+
+```
+ckan-cloud-operator cluster kamatera ssh-management-machine
+```
+
+Run from the management server SSH session:
+
+```
+ufw allow 22 &&\
+ufw allow 443 &&\
+ufw allow 80 &&\
+ufw allow from 172.16.0.0/23 &&\
+ufw --force enable &&\
+ufw status numbered
+```
+
+This allows access to Ports 22, 443, 80 and to any port from the internal network
+
+You can test by trying to access the NFS port 111 - should should be blocked from an external network
+
+```
+telnet MANAGEMENT_MACHINE_EXTERNAL_IP 111
+```
+
+But, from the management machine it will work
+
+```
+ckan-cloud-operator cluster kamatera ssh-management-machine MANAGEMENT_MACHINE_EXTERNAL_IP 111
+```
+
+## Expose docker registry internally
+
+* Rancher web UI > Cluster > Default > Service Discovery > Add Record
+* Name: `docker-registry-nodeport`
+* Resolves to: One or more workloads
+* Target Workload: `docker-registry`
+* Advanced Options:
+* As A: `NodePort`
+* Port Mapping: Name: 5000, Service Port: 5000, Target Port: Same as Service Port, Node Port: Random
+
+Get the node port:
+
+```
+kubectl get service -n default docker-registry-nodeport -o jsonpath={.spec.ports[0].nodePort} && echo
+```
+
+Try to access the Node Port using the external IP - you should be refused connection
+
+Try from the management server -  should succeed (without output) (get the internal IP from Kamatera console)
+
+```
+ckan-cloud-operator cluster kamatera ssh-management-machine curl http://INTERNAL_IP:NODE_PORT/
+```
+
+## Expose Docker Registry externally
+
+Add a route:
+
+```
+ckan-cloud-operator routers create-backend-url-subdomain-route infra-1 docker-registry http://INTERNAL_NODE_IP:NODE_PORT docker-registry
+```
+
+Try to login to the Docker Registry from an external IP:
+
+```
+docker login https://docker-registry.ROOT_DOMAIN
+```
+
+Push a test image to the registry:
+
+```
+docker pull hello-world && docker tag hello-world docker-registry.ROOT_DOMAIN/foobar/hello-world
+docker push docker-registry.ROOT_DOMAIN/foobar/hello-world
+```
+
+Pull from the registry
+
+```
+docker push docker-registry.ROOT_DOMAIN/foobar/hello-world
 ```

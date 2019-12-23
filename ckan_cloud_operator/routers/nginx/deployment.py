@@ -4,6 +4,7 @@ from ckan_cloud_operator.routers.nginx import config as nginx_router_config
 from ckan_cloud_operator.routers.routes import manager as routes_manager
 from ckan_cloud_operator.labels import manager as labels_manager
 from ckan_cloud_operator.config import manager as config_manager
+from ckan_cloud_operator.providers.cluster import manager as cluster_manager
 
 
 def _get_resource_name(router_name):
@@ -72,7 +73,7 @@ def get_cloudflare_credentials():
 
 
 def update(router_name, wait_ready, spec, annotations, routes, dry_run=False):
-    raise NotImplementedError()
+    cluster_manager.get_provider().update_nginx_router(router_name, wait_ready, spec, annotations, routes, dry_run)
 
 
 def get(router_name):

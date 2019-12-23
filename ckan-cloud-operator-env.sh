@@ -40,7 +40,7 @@ check_configmap() {
     NAMESPACES=$(kubectl get -n ckan-cloud configmaps)
     if [[ $NAMESPACES != *"operator-conf"* ]]
     then
-        kubectl create -n ckan-cloud configmap operator-conf --from-literal=ckan-cloud-operator-image=viderum/ckan-cloud-operator:latest --from-literal=label-prefix=ckan-cloud
+        kubectl create -n ckan-cloud configmap operator-conf --from-literal=ckan-cloud-operator-image=orihoch/ckan-cloud-operator:latest --from-literal=label-prefix=ckan-cloud
     fi
 }
 
@@ -82,7 +82,7 @@ elif [ "${1}" == "add" ]; then
         else
             CMD=""
             if [ "${BUILD}" == "" ]; then
-                IMAGE=$(docker run --entrypoint bash -v ${KUBECONFIG_FILE}:/.kube-config -e KUBECONFIG=/.kube-config viderum/ckan-cloud-operator:minimal-20190416 -c "kubectl -n ckan-cloud get configmap/operator-conf -ojsonpath={.data.ckan-cloud-operator-image}")
+                IMAGE=$(docker run --entrypoint bash -v ${KUBECONFIG_FILE}:/.kube-config -e KUBECONFIG=/.kube-config orihoch/ckan-cloud-operator:minimal-20190416 -c "kubectl -n ckan-cloud get configmap/operator-conf -ojsonpath={.data.ckan-cloud-operator-image}")
             else
                 IMAGE="${BUILD}"
             fi

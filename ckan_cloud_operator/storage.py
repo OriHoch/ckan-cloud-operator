@@ -94,7 +94,7 @@ def deploy_gcs_minio_proxy(router_name):
                 'containers': [
                     {
                         'name': 'minio',
-                        'image': 'viderum/ckan-cloud-operator-gcsminio-proxy',
+                        'image': 'orihoch/ckan-cloud-operator-gcsminio-proxy',
                         'env': [
                             {
                                 'name': 'GOOGLE_APPLICATION_CREDENTIALS',

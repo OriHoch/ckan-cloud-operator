@@ -61,7 +61,7 @@ def initialize(log_kwargs=None, interactive=False, default_cluster_provider=None
 
     if not skip_to:
         if not operator_image:
-            operator_image = 'viderum/ckan-cloud-operator:latest'
+            operator_image = 'orihoch/ckan-cloud-operator:latest'
         logs.info(f'Creating operator namespace: {OPERATOR_NAMESPACE}', **(log_kwargs or {}))
         subprocess.call(f'kubectl create ns {OPERATOR_NAMESPACE}', shell=True)
         assert default_cluster_provider in ['gcloud', 'aws', 'minikube', 'kamatera'], f'invalid cluster provider: {default_cluster_provider}'

@@ -76,7 +76,7 @@ def post_deploy_hook(instance_id, instance, deploy_kwargs):
                             'envFrom': [
                                 {'secretRef': {'name': 'jnlp-slave-kube-prod-1', 'optional': False}}
                             ],
-                            'image': 'viderum/ckan-cloud-operator:jnlp-v0.2.7',
+                            'image': 'orihoch/ckan-cloud-operator-jnlp@',
                             'imagePullPolicy': 'Always',
                             'name': 'jnlp-kube-prod-1',
                             'resources': {},

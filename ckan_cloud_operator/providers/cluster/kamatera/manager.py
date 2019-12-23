@@ -17,6 +17,9 @@ def _config_interactive_set(default_values, namespace=None, is_secret=False, suf
 # custom provider code starts here
 #
 
+from tempfile import NamedTemporaryFile
+
+
 import os
 import json
 import datetime
@@ -25,6 +28,7 @@ import binascii
 import yaml
 import sys
 from ckan_cloud_operator import cloudflare
+from ckan_cloud_operator.config import manager as config_manager
 
 
 def initialize(interactive=False):
@@ -475,3 +479,103 @@ server {{
     input('Press <Enter> to continue...')
 
 
+def get_management_machine_secrets(key=None):
+    return config_manager.get(key, secret_name='cco-kamatera-management-server', namespace='ckan-cloud-operator')
+
+
+def ssh_management_machine(*args, check_output=False, scp_to_remote_file=None):
+    machine_secrets = get_management_machine_secrets()
+    id_rsa = machine_secrets['id_rsa']
+    server_ip = machine_secrets['server_public_ip']
+    with NamedTemporaryFile('wb') as f:
+        f.write(id_rsa.encode('ascii'))
+        f.flush()
+        if scp_to_remote_file:
+            with NamedTemporaryFile('w') as tempfile:
+                tempfile.write("\n".join(args))
+                tempfile.flush()
+                cmd = ['scp', '-i', f.name, tempfile.name, 'root@' + server_ip + ':' + scp_to_remote_file]
+                subprocess.check_call(cmd)
+                return 0
+        else:
+            cmd = ['ssh', '-i', f.name, 'root@' + server_ip, *args]
+            if check_output:
+                return subprocess.check_output(cmd)
+            else:
+                return subprocess.call(cmd)
+
+
+def initialize_docker_registry():
+    subprocess.check_call(['helm', 'repo', 'add', 'stable', 'https://kubernetes-charts.storage.googleapis.com/'])
+    subprocess.check_call(['helm', 'repo', 'update'])
+    _config_interactive_set({
+        'docker-registry-username': '',
+        'docker-registry-password': ''
+    }, is_secret=True)
+    htpasswd_secret = subprocess.check_output(['htpasswd', '-Bbn', _config_get('docker-registry-username', is_secret=True), _config_get('docker-registry-password', is_secret=True)]).decode().strip()
+    subprocess.check_call(['helm', 'install', '-n', 'default',
+                           '--set', 'secrets.htpasswd=' + htpasswd_secret,
+                           '--set', 'persistence.enabled=true',
+                           '--set', 'persistence.storageClass=nfs-client',
+                           '--set', 'persistence.size=20Gi',
+                           'docker-registry', 'stable/docker-registry'])
+
+
+def update_nginx_router(router_name, wait_ready, spec, annotations, routes, dry_run):
+    management_secrets = get_management_machine_secrets()
+    rancher_subdomain = management_secrets['rancher_sub_domain']
+    root_domain = management_secrets['RootDomainName']
+    route_subdomains = set()
+    for route in routes:
+        assert route['spec']['root-domain'] == root_domain
+        assert route['spec']['sub-domain'] != rancher_subdomain
+        assert route['spec']['sub-domain'] not in route_subdomains
+        route_subdomains.add(route['spec']['sub-domain'])
+    print('Updating Cloudflare A Records')
+    for subdomain in route_subdomains:
+        cloudflare.update_a_record(
+            management_secrets['CloudflareEmail'], management_secrets['CloudflareApiKey'],
+            root_domain,
+            subdomain + '.' + root_domain,
+            management_secrets['server_public_ip']
+        )
+    print('Registering certificates')
+    ssh_management_machine('certbot', 'certonly',
+                           '--agree-tos', '--email', management_secrets['CloudflareEmail'],
+                           '--webroot',
+                           '-w', '/var/lib/letsencrypt/',
+                           '-d', ','.join([f'{s}.{root_domain}' for s in [rancher_subdomain, *route_subdomains]]))
+    for route in routes:
+        if route['spec']['sub-domain'] in route_subdomains:
+            ssh_management_machine(
+                "location / {",
+                    f'proxy_pass {route["spec"]["backend-url"]};',
+                    "include snippets/http2_proxy.conf;",
+                "}",
+                scp_to_remote_file=f'/etc/nginx/snippets/{route["spec"]["sub-domain"]}.conf'
+            )
+            ssh_management_machine(
+                "map $http_upgrade $connection_upgrade {",
+                    "default Upgrade;",
+                    '""      close;',
+                "}",
+                "server {",
+                    "listen 80;",
+                    "listen    [::]:80;",
+                    f"server_name {route['spec']['sub-domain']}.{root_domain};",
+                    "include snippets/letsencrypt.conf;",
+                    "return 301 https://$host$request_uri;",
+                "}",
+                "server {",
+                    "listen 443 ssl http2;",
+                    "listen [::]:443 ssl http2;",
+                    f"server_name {route['spec']['sub-domain']}.{root_domain};",
+                    "include snippets/letsencrypt_certs.conf;",
+                    "include snippets/ssl.conf;",
+                    "include snippets/letsencrypt.conf;",
+                    f"include snippets/{route['spec']['sub-domain']}.conf;",
+                "}",
+                scp_to_remote_file=f'/etc/nginx/sites-enabled/{route["spec"]["sub-domain"]}'
+            )
+    ssh_management_machine('systemctl reload nginx')
+    exit(42)

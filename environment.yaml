@@ -2,9 +2,10 @@ name: ckan-cloud-operator
 channels:
   - defaults
 dependencies:
-  - python>=3.7
+  - python>=3.7,<3.8
   - psycopg2
   - pip
+  - bitarray
   - pip:
     - pyyaml
     - kubernetes

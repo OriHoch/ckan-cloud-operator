@@ -332,6 +332,7 @@ def _get_submodule_ids_provider_or_provider_ids(submodule=None, provider_id=None
 
     elif submodule == storage_provider_submodule:
         from ckan_cloud_operator.providers.storage.minio.constants import PROVIDER_ID as storage_minio_provider_id
+        from ckan_cloud_operator.providers.storage.kamatera_nfs.constants import PROVIDER_ID as storage_kamatera_nfs_provider_id
 
         if not provider_id:
             return []
@@ -342,6 +343,13 @@ def _get_submodule_ids_provider_or_provider_ids(submodule=None, provider_id=None
             from ckan_cloud_operator.providers.storage.minio import manager as storage_minio_manager
 
             return storage_minio_manager
+
+        ## kamatera-nfs
+
+        elif provider_id == storage_kamatera_nfs_provider_id:
+            from ckan_cloud_operator.providers.storage.kamatera_nfs import manager as storage_kamatera_nfs_manager
+
+            return storage_kamatera_nfs_manager
 
     ## solr
 
