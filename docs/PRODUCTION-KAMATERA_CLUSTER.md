@@ -144,6 +144,14 @@ kubectl get nodes
 ckan-cloud-operator storage initialize --interactive --provider-id kamatera-nfs
 ```
 
+## Install nfs-common on all cluster nodes
+
+This is required for proper NFS support, should be done whenever new nodes are added to the cluster
+
+```
+ckan-cloud-operator cluster kamatera ssh-rancher-nodes "apt-get update && apt-get install -y nfs-common"
+```
+
 ## Initialize Private Docker Registry
 
 ```
@@ -226,13 +234,19 @@ ckan-cloud-operator cluster kamatera ssh-management-machine curl http://INTERNAL
 
 ## Expose Docker Registry externally
 
-Add a route:
+The Docker Registry is protected with a password, so we can expose it externally.
+
+However, it uses HTTP auth which is not encrypted, so to expose publicly we need SSL
+
+Following command adds a route to router `infra-1` which is configured to work using Nginx on the management server
+
+It creates the route from external domain `docker-registry.ROOT_DOMAIN` to INTERNAL_IP:NODE_PORT (internal IP of any node with the node port for the docker-registry-nodeport service)
 
 ```
 ckan-cloud-operator routers create-backend-url-subdomain-route infra-1 docker-registry http://INTERNAL_NODE_IP:NODE_PORT docker-registry
 ```
 
-Try to login to the Docker Registry from an external IP:
+Login to the Docker Registry from an external IP:
 
 ```
 docker login https://docker-registry.ROOT_DOMAIN
@@ -249,4 +263,86 @@ Pull from the registry
 
 ```
 docker push docker-registry.ROOT_DOMAIN/foobar/hello-world
+```
+
+## Deploy Jenkins
+
+Create a persistent volume in the management server:
+
+```
+ckan-cloud-operator cluster kamatera ssh-management-machine "mkdir -p /srv/default/jenkins && chown 1000:1000 /srv/default/jenkins"
+```
+
+Using Rancher Web UI, deploy a new workload:
+
+* Name: `jenkins`
+* Scalable deployment of 1 pods
+* Docker Image: `jenkins/jenkins:lts`
+* Namespace: `default`
+* Port Mapping: Add Port:
+  * Name: `web`, container port: `8080`, As a: NodePort, listening port: random
+* Add Volume: Add an ephemereal volume:
+  * Source: NFS Share, Path: `/srv/default/jenkins`, Server: `MANAGEMENT_SERVER_INTERNAL_IP`
+  * Mount Point: `/var/jenkins_home`
+
+Add a route:
+
+```
+ckan-cloud-operator routers create-backend-url-subdomain-route infra-1 jenkins http://INTERNAL_NODE_IP:JENKINS_NODE_PORT jenkins
+```
+
+Access Jenkins at https://jenkins.ROOT_DOMAIN and install with suggested plugins
+
+To get the Jenkins initial admin password:
+
+```
+ckan-cloud-operator cluster kamatera ssh-management-machine cat /srv/default/jenkins/secrets/initialAdminPassword
+```
+
+Install Jenkins Agent on the management machine:
+
+```
+ckan-cloud-operator cluster kamatera ssh-management-machine -- mkdir -p /var/jenkins_agent &&\
+ckan-cloud-operator cluster kamatera ssh-management-machine -- add-apt-repository ppa:openjdk-r/ppa -y &&\
+ckan-cloud-operator cluster kamatera ssh-management-machine -- apt-get install openjdk-8-jdk -y
+```
+
+Get the private SSH key for accessing the management machine:
+
+```
+ckan-cloud-operator cluster kamatera print-management-machine-secrets --key id_rsa
+```
+
+From Jenkins web UI > Nodes > Add New Node:
+
+* Node name: `management`
+* Permanent Agent
+* Remote root directory: `/var/jenkins_agent`
+* Labels: `management`
+* Only build jobs matching this node
+* Launch agent via SSH - 
+  * host: the Rancher domain
+  * using the private SSH key for the management machine
+    * `ckan-cloud-operator cluster kamatera print-management-machine-secrets --key id_rsa`
+
+Copy the cluster KUBECONFIG file to the management server:
+
+```
+ckan-cloud-operator cluster kamatera ssh-management-machine -- mkdir -p /etc/my-cluster &&\
+ckan-cloud-operator cluster kamatera scp-to-management-machine $KUBECONFIG /etc/my-cluster/.kubeconfig 
+```
+
+Setup the management server to run ckan-cloud-operator:
+
+```
+ckan-cloud-operator cluster kamatera ssh-management-machine -- curl -s https://raw.githubusercontent.com/OriHoch/ckan-cloud-operator/kamatera-cluster-rc1/ckan-cloud-operator-env.sh -o /usr/local/bin/ckan-cloud-operator-env &&\
+ckan-cloud-operator cluster kamatera ssh-management-machine -- chmod +x /usr/local/bin/ckan-cloud-operator-env &&\
+ckan-cloud-operator cluster kamatera ssh-management-machine -- ckan-cloud-operator-env pull latest &&\
+ckan-cloud-operator cluster kamatera ssh-management-machine -- ckan-cloud-operator-env add my-cluster /etc/my-cluster/.kubeconfig ckan-cloud-operator
+```
+
+Get cluster info via the management machine:
+
+```
+ckan-cloud-operator cluster kamatera ssh-management-machine -- -t ckan-cloud-operator cluster info
 ```

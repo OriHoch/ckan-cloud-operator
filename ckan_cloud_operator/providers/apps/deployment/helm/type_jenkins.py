@@ -8,15 +8,15 @@ DEFAULT_CHART_VALUES = {
 }
 
 DEFAULT_VALUES = {
-    'Agent': {
-        'Enabled': False,
+    'agent': {
+        'enabled': False,
     },
-    'Master': {
-        'ServiceType': 'ClusterIP',
+    'master': {
+        'serviceType': 'NodePort',
     },
-    'Persistence': {
-        'Size': '100Gi',
-        'StorageClass': 'cca-ckan'
+    'persistence': {
+        'size': '100Gi',
+        'storageClass': 'cca-ckan'
     }
 }
 

@@ -29,6 +29,8 @@ import yaml
 import sys
 from ckan_cloud_operator import cloudflare
 from ckan_cloud_operator.config import manager as config_manager
+from ckan_cloud_operator.routers.routes import manager as routes_manager
+from ckan_cloud_operator import kubectl
 
 
 def initialize(interactive=False):
@@ -547,9 +549,10 @@ def update_nginx_router(router_name, wait_ready, spec, annotations, routes, dry_
                            '-d', ','.join([f'{s}.{root_domain}' for s in [rancher_subdomain, *route_subdomains]]))
     for route in routes:
         if route['spec']['sub-domain'] in route_subdomains:
+            backend_url = routes_manager.get_backend_url(route)
             ssh_management_machine(
                 "location / {",
-                    f'proxy_pass {route["spec"]["backend-url"]};',
+                    f'proxy_pass {backend_url};',
                     "include snippets/http2_proxy.conf;",
                 "}",
                 scp_to_remote_file=f'/etc/nginx/snippets/{route["spec"]["sub-domain"]}.conf'
@@ -578,4 +581,27 @@ def update_nginx_router(router_name, wait_ready, spec, annotations, routes, dry_
                 scp_to_remote_file=f'/etc/nginx/sites-enabled/{route["spec"]["sub-domain"]}'
             )
     ssh_management_machine('systemctl reload nginx')
-    exit(42)
+
+
+def rancher(*args, context='Default'):
+    management_secrets = get_management_machine_secrets()
+    subprocess.check_call([
+        'rancher', 'login',
+        '--token', management_secrets['rancher_bearer_token'],
+        management_secrets['rancher_endpoint']
+    ])
+    subprocess.check_call(['rancher', 'context', 'switch', context])
+    subprocess.check_call(['rancher', *args])
+
+
+def ssh_rancher_nodes(ssh_args):
+    for node in kubectl.get('nodes')['items']:
+        node_name = node['metadata']['name']
+        print()
+        print('Running on node ' + node_name)
+        print()
+        rancher('ssh', node_name, ' '.join(ssh_args))
+        print()
+        print()
+    print('Great Success!')
+    print('Ran command on all nodes: "' + ' '.join(ssh_args) + '"')

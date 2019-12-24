@@ -70,7 +70,7 @@ def initialize(log_kwargs=None, interactive=False, default_cluster_provider=None
 
     def initialize_labels(lk):
         from ckan_cloud_operator.labels import manager as labels_manager
-        labels_manager.initialize(log_kwargs=lk)
+        labels_manager.initialize(log_kwargs=lk, interactive=interactive)
 
     def initialize_cluster(lk):
         from ckan_cloud_operator.providers import manager as providers_manager

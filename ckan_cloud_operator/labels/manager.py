@@ -4,9 +4,12 @@ from ckan_cloud_operator import kubectl
 from ckan_cloud_operator.config import manager as config_manager
 
 
-def initialize(log_kwargs=None):
+def initialize(log_kwargs=None, interactive=False):
     logs.info('setting label-prefix: ckan-cloud', **(log_kwargs or {}))
     config_manager.set('label-prefix', 'ckan-cloud')
+    config_manager.interactive_set({
+        'short-label-prefix': 'cc'
+    }, interactive=interactive)
 
 
 def get_label_prefix(short=False):

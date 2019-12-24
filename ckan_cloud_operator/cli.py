@@ -30,6 +30,7 @@ from ckan_cloud_operator.drivers.rancher import cli as driver_rancher_cli
 from ckan_cloud_operator.drivers.jenkins import cli as driver_jenkins_cli
 from ckan_cloud_operator.drivers.helm import cli as driver_helm_cli
 from ckan_cloud_operator.providers.apps import cli as apps_cli
+from ckan_cloud_operator.labels import cli as labels_cli
 
 
 CLICK_CLI_MAX_CONTENT_WIDTH = 200
@@ -59,6 +60,7 @@ main.add_command(ckan_cli.ckan)
 main.add_command(storage_cli.storage)
 main.add_command(solr_cli.solr)
 main.add_command(apps_cli.apps)
+main.add_command(labels_cli.labels)
 
 
 @main.group()
