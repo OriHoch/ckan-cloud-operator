@@ -86,13 +86,14 @@ def update(instance_id_or_name, override_spec=None, persist_overrides=False, wai
             assert root_domain == routers_manager.get_default_root_domain(), \
                 'invalid domain, must use default root domain'
             logs.info(f'adding instance default route to {sub_domain}.{root_domain}')
-            routers_manager.create_subdomain_route('instances-default', {
+            router_name = instance['spec'].get('router-name', 'instances-default')
+            routers_manager.create_subdomain_route(router_name, {
                 'target-type': 'app-instance',
                 'app-instance-id': instance_id,
                 'root-domain': root_domain,
                 'sub-domain': sub_domain
             })
-            routers_manager.update('instances-default', wait_ready)
+            routers_manager.update(router_name, wait_ready)
         else:
             logs.info('skipping route creation', skip_route=skip_route,
                       sub_domain=pre_update_hook_data.get('sub-domain'))

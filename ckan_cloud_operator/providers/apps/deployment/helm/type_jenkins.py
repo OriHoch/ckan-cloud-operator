@@ -8,15 +8,15 @@ DEFAULT_CHART_VALUES = {
 }
 
 DEFAULT_VALUES = {
-    'Agent': {
-        'Enabled': False,
+    'agent': {
+        'enabled': False,
     },
-    'Master': {
-        'ServiceType': 'ClusterIP',
+    'master': {
+        'serviceType': 'NodePort',
     },
-    'Persistence': {
-        'Size': '100Gi',
-        'StorageClass': 'cca-ckan'
+    'persistence': {
+        'size': '100Gi',
+        'storageClass': 'cca-ckan'
     }
 }
 
@@ -76,7 +76,7 @@ def post_deploy_hook(instance_id, instance, deploy_kwargs):
                             'envFrom': [
                                 {'secretRef': {'name': 'jnlp-slave-kube-prod-1', 'optional': False}}
                             ],
-                            'image': 'viderum/ckan-cloud-operator:jnlp-v0.2.7',
+                            'image': 'orihoch/ckan-cloud-operator-jnlp@',
                             'imagePullPolicy': 'Always',
                             'name': 'jnlp-kube-prod-1',
                             'resources': {},

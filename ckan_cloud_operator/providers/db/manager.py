@@ -22,14 +22,16 @@ def initialize(log_kwargs=None, interactive=False, default_cluster_provider=None
     elif not default_cluster_provider or default_cluster_provider == 'minikube':
         default_provider = db_minikube_provider_id
     else:
-        raise NotImplementedError(f'Unknown provider: {default_cluster_provider}')
-    log_kwargs = log_kwargs or {}
-    logs.info(f'Initializing DB provider', **log_kwargs)
-    db_provider = providers_manager.get_provider(db_provider_submodule, default=default_provider)
-    db_provider.initialize(interactive=interactive)
-    if db_provider.is_private_ip():
-        logs.info('DB Uses a private ip, initializing the DB proxy')
-        db_proxy_manager.initialize()
+        default_provider = None
+        logs.info(f'Unknown provider for DB: {default_cluster_provider}')
+    if default_provider:
+        log_kwargs = log_kwargs or {}
+        logs.info(f'Initializing DB provider', **log_kwargs)
+        db_provider = providers_manager.get_provider(db_provider_submodule, default=default_provider)
+        db_provider.initialize(interactive=interactive)
+        if db_provider.is_private_ip():
+            logs.info('DB Uses a private ip, initializing the DB proxy')
+            db_proxy_manager.initialize()
 
 
 def update():

@@ -32,9 +32,12 @@ def initialize():
 @click.option('--skip-deployment', is_flag=True)
 @click.option('--skip-route', is_flag=True)
 @click.option('--force', is_flag=True)
+@click.option('--deployment-provider')
 def create(values_file, instance_id, instance_name, exists_ok, dry_run, update_, wait_ready,
-           skip_deployment, skip_route, force):
-    manager.create(instance_id=instance_id, instance_name=instance_name,
+           skip_deployment, skip_route, force, deployment_provider):
+    if not deployment_provider:
+        deployment_provider = 'helm'
+    manager.create(deployment_provider=deployment_provider, instance_id=instance_id, instance_name=instance_name,
                    values_filename=values_file, exists_ok=exists_ok, dry_run=dry_run, update_=update_,
                    wait_ready=wait_ready, skip_deployment=skip_deployment, skip_route=skip_route, force=force)
     logs.exit_great_success()

@@ -39,7 +39,7 @@ def deploy():
                 'containers': [
                     {
                         'name': 'solrcloud-proxy',
-                        'image': 'viderum/ckan-cloud-operator-solrcloud-proxy',
+                        'image': 'orihoch/ckan-cloud-operator-solrcloud-proxy',
                         'envFrom': [{'secretRef': {'name': 'solrcloud-proxy'}}],
                         'ports': [{'containerPort': 8983}],
                     }

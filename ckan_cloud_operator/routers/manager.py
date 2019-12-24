@@ -5,6 +5,7 @@ from ckan_cloud_operator import kubectl
 from ckan_cloud_operator import logs
 from ckan_cloud_operator.routers.annotations import CkanRoutersAnnotations
 from ckan_cloud_operator.routers.traefik import manager as traefik_manager
+from ckan_cloud_operator.routers.nginx import manager as nginx_manager
 from ckan_cloud_operator.routers.routes import manager as routes_manager
 from ckan_cloud_operator.providers.routers.manager import get_env_id, get_default_root_domain
 
@@ -13,6 +14,9 @@ ROUTER_TYPES = {
     'traefik': {
         'default': True,
         'manager': traefik_manager
+    },
+    'nginx': {
+        'manager': nginx_manager
     }
 }
 
@@ -54,6 +58,25 @@ def get_traefik_router_spec(default_root_domain=None, cloudflare_email=None, clo
         },
         'wildcard-ssl-domain': wildcard_ssl_domain,
         'external-domains': bool(external_domains),
+        'dns-provider': dns_provider
+    }
+
+
+def get_nginx_router_spec(default_root_domain=None, cloudflare_email=None, cloudflare_api_key=None, dns_provider=None):
+    if not default_root_domain: default_root_domain = 'default'
+    if not cloudflare_email: cloudflare_email = 'default'
+    if not cloudflare_api_key: cloudflare_api_key = 'default'
+    return {
+        'type': 'nginx',
+        'default-root-domain': default_root_domain,
+        # the cloudflare spec is not saved as part of the CkanCloudRouter spec
+        # it is removed and saved as a secret by the traefik router manager
+        'cloudflare': {
+            'email': cloudflare_email,
+            'api-key': cloudflare_api_key
+        },
+        'wildcard-ssl-domain': None,
+        'external-domains': False,
         'dns-provider': dns_provider
     }
 

@@ -166,7 +166,7 @@ def _apply_deployment():
                     'containers': [
                         {
                             'name': 'pgbouncer',
-                            'image': 'viderum/ckan-cloud-operator:pgbouncer',
+                            'image': 'orihoch/ckan-cloud-operator:pgbouncer',
                             'ports': [{'containerPort': 5432}],
                             'volumeMounts': [
                                 {

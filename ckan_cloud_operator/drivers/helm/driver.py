@@ -5,6 +5,9 @@ from ckan_cloud_operator import logs
 
 
 def init(tiller_namespace_name):
+    if not tiller_namespace_name:
+        logs.info('Using Helm3 Tiller-less deployment')
+        return
     if kubectl.get('ns', tiller_namespace_name, required=False):
         logs.info('namespace already exists')
     else:
@@ -55,7 +58,8 @@ def deploy(tiller_namespace, chart_repo, chart_name, chart_version, release_name
 
     version_args = f'--version "{chart_version}"' if chart_version else ''
     dry_run_args = '--dry-run --debug'
-    cmd = f'helm --tiller-namespace {tiller_namespace} upgrade {release_name} {chart_name} ' \
+    tiller_namespace_arg = f'--tiller-namespace {tiller_namespace}' if tiller_namespace else ''
+    cmd = f'helm {tiller_namespace_arg} upgrade {release_name} {chart_name} ' \
           f' --install --namespace "{namespace}" -i {version_args}'
     if values_filename:
         cmd += f' -f {values_filename}'

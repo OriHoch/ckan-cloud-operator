@@ -69,21 +69,27 @@ ckan-cloud-operator-env activate <ENVIRONMENT_NAME>
 
 ## Run ckan-cloud-operator locally
 
-Ensure you have `kubectl` and `gcloud` binaries, authenticated to the relevant gcloud account / kubernetes cluster.
+Ensure you have the required external dependencies such as `kubectl` and cloud provider binaries. You can check the Dockerfile for details.
 
-See the required system dependencies: [environment.yaml](environment.yaml)
+You should be authenticated to the relevant Kubernetes cluster / cloud provider.
 
-You can [Install miniconda3](https://conda.io/miniconda.html), then create the environment using: `conda env create -f environment.yaml`
+[Install miniconda3](https://conda.io/miniconda.html) and create the environment using: `conda env create -f environment.yaml`
+
+If you want to use a local Python, see the required Python dependencies: [environment.yaml](environment.yaml)
 
 Activate the conda environment using `conda activate ckan-cloud-operator`
 
-Install the Python package:
+Update the environment: `conda env update -f environment.yaml`
+
+Install the ckan-cloud-operator Python package:
 
 ```
 python3 -m pip install -e .
 ```
 
-Authenticate the gcloud CLI to the relevant account:
+Depending on cloud provider some additional activation might be required
+
+For example, for Google Cloud, this command is required:
 
 ```
 ckan-cloud-operator activate-gcloud-auth

@@ -64,9 +64,14 @@ def create(tiller_namespace_name=None, chart_repo=None, chart_version=None, char
 
 
 def update(instance_id, instance, dry_run=False):
-    tiller_namespace_name = _get_tiller_namespace_name(instance_id, instance)
-    logs.debug('Updating helm-based instance deployment',
-               instance_id=instance_id, tiller_namespace_name=tiller_namespace_name)
+    if instance['spec'].get('helm3'):
+        tiller_namespace_name = None
+    else:
+        tiller_namespace_name = _get_tiller_namespace_name(instance_id, instance)
+    if tiller_namespace_name:
+        logs.debug('Updating helm-based instance deployment', instance_id=instance_id, tiller_namespace_name=tiller_namespace_name)
+    else:
+        logs.debug('Updating helm3 based instance deployment', instance_id=instance_id)
     chart_repo_name = instance['spec'].get("chart-repo-name")
     assert chart_repo_name, 'missing spec attribute: chart-repo-name'
     logs.info(chart_repo_name=chart_repo_name)
