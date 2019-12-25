@@ -40,17 +40,19 @@ The components can be separated later to different servers if needed.
 Pull the Docker image to create the server:
 
 ```
-docker pull orihoch/ckan-cloud-operator-minimal
+CKAN_CLOUD_OPERATOR_MINIMAL_IMAGE="orihoch/ckan-cloud-operator-minimal@sha256:b6ce7590006b6fe7eae8d5914c5e1f2fae91f9fdcb83a2af56b43bd6ff37faf4"
+docker pull "${CKAN_CLOUD_OPERATOR_MINIMAL_IMAGE}"
+docker tag "${CKAN_CLOUD_OPERATOR_MINIMAL_IMAGE}" ckan-cloud-operator-minimal
 ```
 
-(Alternatively - build the image from checkout of ckan-cloud-operator: `docker build -t orihoch/ckan-cloud-operator-minimal -f Dockerfile.minimal .`)
+(Alternatively - build the image from checkout of ckan-cloud-operator: `docker build -t ckan-cloud-operator-minimal -f Dockerfile.minimal .`)
 
 The following ckan-cloud-operator command will start interactive creation of the management server,
 follow the instructions on the terminal,
 the whole process takes ~15 minutes:
 
 ```
-docker run -it orihoch/ckan-cloud-operator-minimal cluster kamatera create-management-server --interactive
+docker run -it ckan-cloud-operator-minimal cluster kamatera create-management-server --interactive
 ```
 
 Store the output of the terminal session securely, it contains all required secrets and installation details which is useful for debugging and recovery.

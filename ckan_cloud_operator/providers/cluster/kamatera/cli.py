@@ -13,8 +13,9 @@ def kamatera():
 
 @kamatera.command()
 @click.option('--interactive', is_flag=True)
-def create_management_server(interactive):
-    manager.create_management_server(interactive)
+@click.option('--values')
+def create_management_server(interactive, values):
+    manager.create_management_server(interactive, values)
     logs.exit_great_success()
 
 
