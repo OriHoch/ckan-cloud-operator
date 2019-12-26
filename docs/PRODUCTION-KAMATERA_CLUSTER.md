@@ -201,13 +201,13 @@ This allows access to Ports 22, 443, 80 and to any port from the internal networ
 You can test by trying to access the NFS port 111 - should should be blocked from an external network
 
 ```
-telnet MANAGEMENT_MACHINE_EXTERNAL_IP 111
+telnet `ckan-cloud-operator cluster kamatera management-public-ip` 111
 ```
 
 But, from the management machine it will work
 
 ```
-ckan-cloud-operator cluster kamatera ssh-management-machine MANAGEMENT_MACHINE_EXTERNAL_IP 111
+ckan-cloud-operator cluster kamatera ssh-management-machine telnet `ckan-cloud-operator cluster kamatera management-public-ip` 111
 ```
 
 ## Expose docker registry internally
@@ -220,18 +220,22 @@ ckan-cloud-operator cluster kamatera ssh-management-machine MANAGEMENT_MACHINE_E
 * As A: `NodePort`
 * Port Mapping: Name: 5000, Service Port: 5000, Target Port: Same as Service Port, Node Port: Random
 
-Get the node port:
+Get the node internal IP and node port:
 
 ```
-kubectl get service -n default docker-registry-nodeport -o jsonpath={.spec.ports[0].nodePort} && echo
+ckan-cloud-operator cluster kamatera nodeport-url docker-registry-nodeport
 ```
 
-Try to access the Node Port using the external IP - you should be refused connection
-
-Try from the management server -  should succeed (without output) (get the internal IP from Kamatera console)
+To make sure node port is exposed internally, get the external IP and try to access this port
 
 ```
-ckan-cloud-operator cluster kamatera ssh-management-machine curl http://INTERNAL_IP:NODE_PORT/
+curl http://EXTERNAL_IP:NODE_PORT
+```
+
+From the management server you can access the internal IP:
+
+```
+ckan-cloud-operator cluster kamatera ssh-management-machine curl http://INTERNAL_IP:NODE_PORT
 ```
 
 ## Expose Docker Registry externally
@@ -245,26 +249,33 @@ Following command adds a route to router `infra-1` which is configured to work u
 It creates the route from external domain `docker-registry.ROOT_DOMAIN` to INTERNAL_IP:NODE_PORT (internal IP of any node with the node port for the docker-registry-nodeport service)
 
 ```
-ckan-cloud-operator routers create-backend-url-subdomain-route infra-1 docker-registry http://INTERNAL_NODE_IP:NODE_PORT docker-registry
+ckan-cloud-operator routers create-backend-url-subdomain-route infra-1 docker-registry http://`ckan-cloud-operator cluster kamatera nodeport-url docker-registry-nodeport` DOCKER_REGISTRY_SUBDOMAIN --client-max-body-size 10240M
 ```
 
 Login to the Docker Registry from an external IP:
 
 ```
-docker login https://docker-registry.ROOT_DOMAIN
+docker login https://DOCKER_REGISTRY_SUBDOMAIN.ROOT_DOMAIN
 ```
 
 Push a test image to the registry:
 
 ```
-docker pull hello-world && docker tag hello-world docker-registry.ROOT_DOMAIN/foobar/hello-world
-docker push docker-registry.ROOT_DOMAIN/foobar/hello-world
+docker pull hello-world && docker tag hello-world DOCKER_REGISTRY_SUBDOMAIN.ROOT_DOMAIN/foobar/hello-world
+docker push DOCKER_REGISTRY_SUBDOMAIN.ROOT_DOMAIN/foobar/hello-world
 ```
 
 Pull from the registry
 
 ```
-docker push docker-registry.ROOT_DOMAIN/foobar/hello-world
+docker pull DOCKER_REGISTRY_SUBDOMAIN.ROOT_DOMAIN/foobar/hello-world
+```
+
+Try to pull while logged-out, it should fail:
+
+```
+docker logout DOCKER_REGISTRY_SUBDOMAIN.ROOT_DOMAIN
+docker pull DOCKER_REGISTRY_SUBDOMAIN.ROOT_DOMAIN/foobar/hello-world
 ```
 
 ## Deploy Jenkins
@@ -283,22 +294,34 @@ Using Rancher Web UI, deploy a new workload:
 * Namespace: `default`
 * Port Mapping: Add Port:
   * Name: `web`, container port: `8080`, As a: NodePort, listening port: random
-* Add Volume: Add an ephemereal volume:
-  * Source: NFS Share, Path: `/srv/default/jenkins`, Server: `MANAGEMENT_SERVER_INTERNAL_IP`
+* Add Volume: Add persistent volume claim:
+  * Name: `jenkins`
+  * provision a new volume
+  * storage class: `nfs-client`
+  * Capacity: 100 GiB
   * Mount Point: `/var/jenkins_home`
+
+Get the internal node port url:
+
+```
+ckan-cloud-operator cluster kamatera nodeport-url jenkins-nodeport
+```
 
 Add a route:
 
 ```
-ckan-cloud-operator routers create-backend-url-subdomain-route infra-1 jenkins http://INTERNAL_NODE_IP:JENKINS_NODE_PORT jenkins
+ckan-cloud-operator routers create-backend-url-subdomain-route infra-1 jenkins http://INTERNAL_NODE_IP:JENKINS_NODE_PORT JENKINS_SUBDOMAIN
 ```
 
-Access Jenkins at https://jenkins.ROOT_DOMAIN and install with suggested plugins
+Access Jenkins at https://JENKINS_SUBDOMAIN.ROOT_DOMAIN and install with suggested plugins
 
 To get the Jenkins initial admin password:
 
 ```
-ckan-cloud-operator cluster kamatera ssh-management-machine cat /srv/default/jenkins/secrets/initialAdminPassword
+ckan-cloud-operator cluster kamatera ssh-management-machine
+
+cd /srv/default/default-jenkins-<TAB><TAB>
+cat secrets/initialAdminPassword
 ```
 
 Install Jenkins Agent on the management machine:
@@ -309,42 +332,114 @@ ckan-cloud-operator cluster kamatera ssh-management-machine -- add-apt-repositor
 ckan-cloud-operator cluster kamatera ssh-management-machine -- apt-get install openjdk-8-jdk -y
 ```
 
-Get the private SSH key for accessing the management machine:
-
-```
-ckan-cloud-operator cluster kamatera print-management-machine-secrets --key id_rsa
-```
-
 From Jenkins web UI > Nodes > Add New Node:
 
 * Node name: `management`
 * Permanent Agent
 * Remote root directory: `/var/jenkins_agent`
 * Labels: `management`
-* Only build jobs matching this node
+* Only build jobs matching label expression
 * Launch agent via SSH - 
   * host: the Rancher domain
   * using the private SSH key for the management machine
     * `ckan-cloud-operator cluster kamatera print-management-machine-secrets --key id_rsa`
 
-Copy the cluster KUBECONFIG file to the management server:
+Nodes > Master > Configure:
+
+  * Usage: Only build jobs matching label expression
+
+Set an environment variable with a config path for the cluster:
 
 ```
-ckan-cloud-operator cluster kamatera ssh-management-machine -- mkdir -p /etc/my-cluster &&\
-ckan-cloud-operator cluster kamatera scp-to-management-machine $KUBECONFIG /etc/my-cluster/.kubeconfig 
+export CLUSTER_CONFIG_PATH=/etc/my-cluster-id
 ```
 
-Setup the management server to run ckan-cloud-operator:
+Copy the cluster KUBECONFIG file to the config path on the management server:
+
+```
+ckan-cloud-operator cluster kamatera ssh-management-machine -- mkdir -p $CLUSTER_CONFIG_PATH &&\
+ckan-cloud-operator cluster kamatera scp-to-management-machine $KUBECONFIG $CLUSTER_CONFIG_PATH/.kubeconfig
+```
+
+Setup the management server to run ckan-cloud-operator using this config path:
 
 ```
 ckan-cloud-operator cluster kamatera ssh-management-machine -- curl -s https://raw.githubusercontent.com/OriHoch/ckan-cloud-operator/kamatera-cluster-rc1/ckan-cloud-operator-env.sh -o /usr/local/bin/ckan-cloud-operator-env &&\
 ckan-cloud-operator cluster kamatera ssh-management-machine -- chmod +x /usr/local/bin/ckan-cloud-operator-env &&\
 ckan-cloud-operator cluster kamatera ssh-management-machine -- ckan-cloud-operator-env pull latest &&\
-ckan-cloud-operator cluster kamatera ssh-management-machine -- ckan-cloud-operator-env add my-cluster /etc/my-cluster/.kubeconfig ckan-cloud-operator
+ckan-cloud-operator cluster kamatera ssh-management-machine -- ckan-cloud-operator-env add default $CLUSTER_CONFIG_PATH/.kubeconfig ckan-cloud-operator
 ```
 
-Get cluster info via the management machine:
+## Create Jenkins Jobs
+
+### ckan-cloud-operator-build
+
+This job update the ckan-cloud-operator image which is used locally form the management server
+
+* Restrict where this project can run: Label Expression: `management`
+* Source code management: `git`
+* Repository URL: `https://github.com/OriHoch/ckan-cloud-operator.git`
+* Execute shell: `docker build -t ckan-cloud-operator .`
+
+### build app
+
+An example job to build and push an app to the private registry
+
+* Restrict where this project can run: Label Expression: `management`
+* Source code management: `git`
+* Repository URL: `repository URL of the app to deploy` 
+* Use secret text or file: add binding: secret text
+  * Variable: `DOCKER_REGISTRY_SECRETS`
+  * Specific Credentials: Add a Secret text, description: `docker-registry-secrets` with the following secret:
+```
+export DOCKER_DOMAIN=(The domain name to the docker registry, e.g. docker-registry.my-domain.com)
+export DOCKER_USERNAME=(Docker registry username)
+export DOCKER_PASSWORD=(Docker registry password)
+```
+* Execute shell:
 
 ```
-ckan-cloud-operator cluster kamatera ssh-management-machine -- -t ckan-cloud-operator cluster info
+#!/usr/bin/env bash
+eval "${DOCKER_REGISTRY_SECRETS}"
+echo $DOCKER_PASSWORD | docker login --password-stdin --username $DOCKER_USERNAME $DOCKER_DOMAIN
 ```
+
+### Run ckan-cloud-operator commands
+
+Add the CLUSTER_CONFIG_PATH you set previously as a Jenkins global env var:
+
+* Jenkins > Manage Jenkins > System > add global environment variable
+  * `CLUSTER_CONFIG_PATH` = `/etc/my-cluster-id`
+
+### scripts
+
+the scripts/ directory contains high-level scripts which can run on Jenkins
+
+Create a job for each script:
+
+* Name: same as script name (without extension)
+* Restrict to run on: `management`
+* Check script source for args and define in job parameters
+* Execute shell:
+
+(Replace the FOO/BAR env vars with the actual arg names defined in the script / job parameters)
+
+For .py scripts:
+
+```
+docker run -v "${CLUSTER_CONFIG_PATH}/.kubeconfig:/etc/ckan-cloud/.kube-config" \
+    -e CKAN_CLOUD_OPERATOR_SRC=/usr/src/ckan-cloud-operator/ckan_cloud_operator \
+    -e FOO -e BAR \
+    --entrypoint bash ckan-cloud-operator -c "source ~/.bashrc; python3 \"/usr/src/ckan-cloud-operator/scripts/${JOB_NAME}.py\""
+```
+
+For .sh scripts:
+
+```
+docker run -v "${CLUSTER_CONFIG_PATH}/.kubeconfig:/etc/ckan-cloud/.kube-config" \
+    -e CKAN_CLOUD_OPERATOR_SRC=/usr/src/ckan-cloud-operator/ckan_cloud_operator \
+    -e FOO -e BAR \
+    --entrypoint bash ckan-cloud-operator -c "source ~/.bashrc; bash \"/usr/src/ckan-cloud-operator/scripts/${JOB_NAME}.sh\""
+```
+
+See scripts/README.md for more details

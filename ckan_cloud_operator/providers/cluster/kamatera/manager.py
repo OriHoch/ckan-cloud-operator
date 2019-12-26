@@ -18,9 +18,11 @@ def _config_interactive_set(default_values, namespace=None, is_secret=False, suf
 #
 
 import subprocess
+import os
 from ckan_cloud_operator import cloudflare
 from ckan_cloud_operator.routers.routes import manager as routes_manager
 from ckan_cloud_operator import kubectl
+from ckan_cloud_operator.config import manager as config_manager
 from .management import manager as management_manager
 
 
@@ -29,7 +31,7 @@ def initialize(interactive=False):
 
 
 def create_management_server(interactive, values):
-    management_manager.create_management_server(interactive, values)
+    management_manager.create_management_server(interactive=interactive, values=values)
 
 
 def get_management_machine_secrets(key=None):
@@ -37,7 +39,7 @@ def get_management_machine_secrets(key=None):
 
 
 def ssh_management_machine(*args, check_output=False, scp_to_remote_file=None):
-    return management_manager.ssh_management_machine(*args, check_output, scp_to_remote_file)
+    return management_manager.ssh_management_machine(*args, check_output=check_output, scp_to_remote_file=scp_to_remote_file)
 
 
 def initialize_docker_registry():
@@ -90,6 +92,8 @@ def update_nginx_router(router_name, wait_ready, spec, annotations, routes, dry_
                 "}",
                 scp_to_remote_file=f'/etc/nginx/snippets/{route["spec"]["sub-domain"]}.conf'
             )
+            client_max_body_size = route['spec'].get('client-max-body-size')
+            client_max_body_size = f"client_max_body_size {client_max_body_size};" if client_max_body_size else ""
             ssh_management_machine(
                 "map $http_upgrade $connection_upgrade {",
                     "default Upgrade;",
@@ -103,6 +107,7 @@ def update_nginx_router(router_name, wait_ready, spec, annotations, routes, dry_
                     "return 301 https://$host$request_uri;",
                 "}",
                 "server {",
+                    client_max_body_size,
                     "listen 443 ssl http2;",
                     "listen [::]:443 ssl http2;",
                     f"server_name {route['spec']['sub-domain']}.{root_domain};",
@@ -116,15 +121,36 @@ def update_nginx_router(router_name, wait_ready, spec, annotations, routes, dry_
     ssh_management_machine('systemctl reload nginx')
 
 
-def rancher(*args, context='Default'):
+def rancher(*args, context='Default', check_output=False):
     management_secrets = get_management_machine_secrets()
-    subprocess.check_call([
-        'rancher', 'login',
-        '--token', management_secrets['rancher_bearer_token'],
-        management_secrets['rancher_endpoint']
-    ])
-    subprocess.check_call(['rancher', 'context', 'switch', context])
-    subprocess.check_call(['rancher', *args])
+    output = None
+    try:
+        output = subprocess.check_output(' '.join([
+            'rancher', 'login',
+            '--token', management_secrets['rancher_bearer_token'],
+            management_secrets['rancher_endpoint']
+        ]) + ' 2>&1', shell=True)
+        output = subprocess.check_output(' '.join(['rancher', 'context', 'switch', context]) + ' 2>&1', shell=True)
+    except Exception:
+        print(output)
+        raise
+    ssh_known_hosts = config_manager.get('ssh_known_hosts', secret_name='cco-kamatera-management-server',
+                                         namespace='ckan-cloud-operator', required=False, default=None)
+    if ssh_known_hosts:
+        os.makedirs('/root/.ssh', exist_ok=True)
+        with open('/root/.ssh/known_hosts', 'w') as known_hosts_file:
+            known_hosts_file.write(ssh_known_hosts)
+    if check_output:
+        res = subprocess.check_output(['rancher', *args])
+    else:
+        subprocess.check_call(['rancher', *args])
+        res = None
+    if os.path.exists('/root/.ssh/known_hosts'):
+        with open('/root/.ssh/known_hosts') as f:
+            new_known_hosts = f.read().strip()
+        if new_known_hosts != ssh_known_hosts.strip():
+            config_manager.set('ssh_known_hosts', new_known_hosts, secret_name='cco-kamatera-management-server', namespace='ckan-cloud-operator')
+    return res
 
 
 def ssh_rancher_nodes(ssh_args):
@@ -138,3 +164,16 @@ def ssh_rancher_nodes(ssh_args):
         print()
     print('Great Success!')
     print('Ran command on all nodes: "' + ' '.join(ssh_args) + '"')
+
+
+def get_management_public_ip():
+    return management_manager.get_management_public_ip()
+
+
+def get_nodeport_url(service_name):
+    service = kubectl.get('service', service_name, namespace='default')
+    node_port = service['spec']['ports'][0]['nodePort']
+    node_name = kubectl.get('nodes')['items'][0]['metadata']['name']
+    output = rancher('ssh', node_name, 'ifconfig', 'eth1', check_output=True).decode()
+    node_ip = output.split(' inet ')[1].split(' ')[0]
+    return '{}:{}'.format(node_ip, node_port)

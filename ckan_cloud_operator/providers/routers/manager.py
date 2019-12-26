@@ -5,15 +5,21 @@ from ckan_cloud_operator.providers.cluster import manager as cluster_manager
 
 
 def initialize(interactive=False):
-    logs.info('env-id is a single character identified of hte environment')
+    logs.info('env-id is a single character identifier of the environment')
     logs.info('.e.g p for production, s for staging, d for development')
+    logs.info("For the first cluster it's recommended to use 'p'")
     default_dns_provider = {
         'aws': 'route53',
     }.get(cluster_manager.get_provider_id(), 'cloudflare')
+    if cluster_manager.get_provider_id() == 'kamatera':
+        from ckan_cloud_operator.providers.cluster.kamatera.management import manager as kamatera_management_manager
+        default_root_domain = kamatera_management_manager.get_management_machine_secrets('RootDomainName')
+    else:
+        default_root_domain = None
     config_manager.interactive_set(
         {
-            'env-id': None,
-            'default-root-domain': None,
+            'env-id': 'p',
+            'default-root-domain': default_root_domain,
             'dns-provider': default_dns_provider
         },
         configmap_name='routers-config',

@@ -134,9 +134,10 @@ def add_cli_commands(click, command_group, great_success):
     @click.argument('ROOT_DOMAIN', required=False, default='default')
     @click.option('--wait-ready', is_flag=True)
     @click.option('--httpauth-secret')
+    @click.option('--client-max-body-size')
     def routers_create_backend_url_subdomain_route(router_name, target_resource_id, backend_url,
                                                    sub_domain, root_domain, wait_ready,
-                                                   httpauth_secret):
+                                                   httpauth_secret, client_max_body_size):
         routers_manager.create_subdomain_route(router_name, {
             'target-type': 'backend-url',
             'target-resource-id': target_resource_id,
@@ -144,6 +145,7 @@ def add_cli_commands(click, command_group, great_success):
             'sub-domain': sub_domain,
             'root-domain': root_domain,
             **({'httpauth-secret': httpauth_secret} if httpauth_secret else {}),
+            **({'client-max-body-size': client_max_body_size} if client_max_body_size else {}),
         })
         routers_manager.update(router_name, wait_ready)
         great_success()

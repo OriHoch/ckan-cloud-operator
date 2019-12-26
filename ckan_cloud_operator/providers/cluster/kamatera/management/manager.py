@@ -527,16 +527,30 @@ def ssh_management_machine(*args, check_output=False, scp_to_remote_file=None):
     with NamedTemporaryFile('wb') as f:
         f.write(id_rsa.encode('ascii'))
         f.flush()
+        ssh_known_hosts = config_manager.get('ssh_known_hosts', secret_name='cco-kamatera-management-server', namespace='ckan-cloud-operator', required=False, default=None)
+        if ssh_known_hosts:
+            os.makedirs('/root/.ssh', exist_ok=True)
+            with open('/root/.ssh/known_hosts', 'w') as known_hosts_file:
+                known_hosts_file.write(ssh_known_hosts)
         if scp_to_remote_file:
             with NamedTemporaryFile('w') as tempfile:
                 tempfile.write("\n".join(args))
                 tempfile.flush()
                 cmd = ['scp', '-i', f.name, tempfile.name, 'root@' + server_ip + ':' + scp_to_remote_file]
                 subprocess.check_call(cmd)
-                return 0
+                res = 0
         else:
             cmd = ['ssh', '-i', f.name, 'root@' + server_ip, *args]
             if check_output:
-                return subprocess.check_output(cmd)
+                res = subprocess.check_output(cmd)
             else:
-                return subprocess.call(cmd)
+                res = subprocess.call(cmd)
+    if os.path.exists('/root/.ssh/known_hosts'):
+        with open('/root/.ssh/known_hosts') as f:
+            if f.read().strip() != ssh_known_hosts.strip():
+                config_manager.set('ssh_known_hosts', f.read(), secret_name='cco-kamatera-management-server', namespace='ckan-cloud-operator')
+    return res
+
+
+def get_management_public_ip():
+    return get_management_machine_secrets('server_public_ip')

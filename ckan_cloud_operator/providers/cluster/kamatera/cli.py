@@ -60,3 +60,14 @@ def rancher(rancher_args, context):
 @click.argument('SSH_ARGS', nargs=-1)
 def ssh_rancher_nodes(ssh_args):
     manager.ssh_rancher_nodes(ssh_args)
+
+
+@kamatera.command()
+def management_public_ip():
+    print(manager.get_management_public_ip())
+
+
+@kamatera.command()
+@click.argument('SERVICE_NAME')
+def nodeport_url(service_name):
+    print(manager.get_nodeport_url(service_name=service_name))

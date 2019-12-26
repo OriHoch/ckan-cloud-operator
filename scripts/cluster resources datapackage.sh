@@ -8,7 +8,7 @@ echo SKIP_CKAN_IMAGES="${SKIP_CKAN_IMAGES}"
 
 rm -rf .checkpoints &&\
 rm -rf "data/${DATAPACKAGE_PREFIX}" &&\
-python3 /home/jenkins/ckan-cloud-operator/ckan_cloud_operator/dataflows/resources.py
+python3 ${CKAN_CLOUD_OPERATOR_SRC:-/home/jenkins/ckan-cloud-operator/ckan_cloud_operator}/dataflows/resources.py
 [ "$?" != "0" ] && exit 1
 ! python3 -c "
 from dataflows import Flow, load, printer
@@ -19,7 +19,7 @@ Flow(
 " > resources.html && exit 1
 
 if [ "${SKIP_CKAN_IMAGES}" != "yes" ]; then
-  ! python3 /home/jenkins/ckan-cloud-operator/ckan_cloud_operator/dataflows/ckan_images.py && exit 1
+  ! python3 ${CKAN_CLOUD_OPERATOR_SRC:-/home/jenkins/ckan-cloud-operator/ckan_cloud_operator}/dataflows/ckan_images.py && exit 1
   ! python3 -c "
 from dataflows import Flow, load, printer
 Flow(
