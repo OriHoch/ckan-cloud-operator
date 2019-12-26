@@ -138,8 +138,9 @@ def main_flow(prefix, operator):
 if __name__ == '__main__':
     prefix = os.environ['DATAPACKAGE_PREFIX']
     operator = os.environ.get('CKAN_CLOUD_OPERATOR_BIN', 'ckan-cloud-operator')
+    data_path = os.environ.get('DATA_PATH', 'data')
     Flow(
         main_flow(prefix, operator),
         printer(num_rows=1),
-        dump_to_path(f'data/{prefix}/resources')
+        dump_to_path(f'{data_path}/{prefix}/resources')
     ).process()

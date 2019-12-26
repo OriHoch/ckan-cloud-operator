@@ -427,8 +427,11 @@ Create a job for each script:
 For .py scripts:
 
 ```
-docker run -v "${CLUSTER_CONFIG_PATH}/.kubeconfig:/etc/ckan-cloud/.kube-config" \
+docker run \
+    -v "${CLUSTER_CONFIG_PATH}/.kubeconfig:/etc/ckan-cloud/.kube-config" \
+    -v "${CLUSTER_CONFIG_PATH}/${JOB_NAME}/data:/etc/ckan-cloud/data" \
     -e CKAN_CLOUD_OPERATOR_SRC=/usr/src/ckan-cloud-operator/ckan_cloud_operator \
+    -e DATA_PATH=/etc/ckan-cloud/data \ 
     -e FOO -e BAR \
     --entrypoint bash ckan-cloud-operator -c "source ~/.bashrc; python3 \"/usr/src/ckan-cloud-operator/scripts/${JOB_NAME}.py\""
 ```
@@ -436,10 +439,13 @@ docker run -v "${CLUSTER_CONFIG_PATH}/.kubeconfig:/etc/ckan-cloud/.kube-config" 
 For .sh scripts:
 
 ```
-docker run -v "${CLUSTER_CONFIG_PATH}/.kubeconfig:/etc/ckan-cloud/.kube-config" \
+docker run \
+    -v "${CLUSTER_CONFIG_PATH}/.kubeconfig:/etc/ckan-cloud/.kube-config" \
+    -v "${CLUSTER_CONFIG_PATH}/${JOB_NAME}/data:/etc/ckan-cloud/data" \
     -e CKAN_CLOUD_OPERATOR_SRC=/usr/src/ckan-cloud-operator/ckan_cloud_operator \
+    -e DATA_PATH=/etc/ckan-cloud/data \
     -e FOO -e BAR \
     --entrypoint bash ckan-cloud-operator -c "source ~/.bashrc; bash \"/usr/src/ckan-cloud-operator/scripts/${JOB_NAME}.sh\""
 ```
 
-See scripts/README.md for more details
+Check the script for any output data and add a post build archive artifacts action

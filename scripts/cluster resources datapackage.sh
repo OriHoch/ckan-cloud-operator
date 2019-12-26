@@ -6,17 +6,20 @@ echo DATAPACKAGE_PREFIX="${DATAPACKAGE_PREFIX}"
 
 [ -z "${DATAPACKAGE_PREFIX}" ] && echo invalid args && exit 1
 
+export DATA_PATH="${DATA_PATH:-data}"
+
 rm -rf .checkpoints &&\
-rm -rf "data/${DATAPACKAGE_PREFIX}" &&\
+rm -rf "${DATA_PATH}/${DATAPACKAGE_PREFIX}" &&\
 python3 ${CKAN_CLOUD_OPERATOR_SRC:-/home/jenkins/ckan-cloud-operator/ckan_cloud_operator}/dataflows/resources.py
 [ "$?" != "0" ] && exit 1
+
 ! python3 -c "
 from dataflows import Flow, load, printer
 Flow(
-  load('data/${DATAPACKAGE_PREFIX}/resources/datapackage.json'),
+  load('${DATA_PATH}/${DATAPACKAGE_PREFIX}/resources/datapackage.json'),
   printer(tablefmt='html', num_rows=9999)
 ).process()
-" > resources.html && exit 1
+" > "${DATA_PATH}/resources.html" && exit 1
 
 #if [ "${SKIP_CKAN_IMAGES}" != "yes" ]; then
 #  ! python3 ${CKAN_CLOUD_OPERATOR_SRC:-/home/jenkins/ckan-cloud-operator/ckan_cloud_operator}/dataflows/ckan_images.py && exit 1
