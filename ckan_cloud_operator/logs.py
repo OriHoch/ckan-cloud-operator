@@ -67,10 +67,10 @@ def exit_catastrophic_failure(exitcode=1, quiet=False):
 def log_subprocess_output(stdout, stderr, kw):
     def _decode_lines(s):
         if s:
-            if kw.get('shell'):
-                return s.split('\n')
-            else:
+            try:
                 return s.decode('utf8').split('\n')
+            except Exception:
+                return s.split('\n')
         else:
             return []
     for line in _decode_lines(stderr):

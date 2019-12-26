@@ -370,6 +370,16 @@ ckan-cloud-operator cluster kamatera ssh-management-machine -- ckan-cloud-operat
 ckan-cloud-operator cluster kamatera ssh-management-machine -- ckan-cloud-operator-env add default $CLUSTER_CONFIG_PATH/.kubeconfig ckan-cloud-operator
 ```
 
+## Add a route with an external domain
+
+Register the DNS to point to the management server public IP
+
+Add the route:
+
+```
+ckan-cloud-operator routers create-backend-url-subdomain-route infra-1 ROUTE_NAME `ckan-cloud-operator cluster kamatera nodeport-url SERVICE_NAME --namespace SERVICE_NAMESPACE` SUB_DOMAIN EXTERNAL_ROOT_DOMAIN
+```
+
 ## Create Jenkins Jobs
 
 ### ckan-cloud-operator-build
@@ -411,6 +421,20 @@ Add the CLUSTER_CONFIG_PATH you set previously as a Jenkins global env var:
 * Jenkins > Manage Jenkins > System > add global environment variable
   * `CLUSTER_CONFIG_PATH` = `/etc/my-cluster-id`
 
+Add a job:
+
+```
+docker run \
+    -v "${CLUSTER_CONFIG_PATH}/.kubeconfig:/etc/ckan-cloud/.kube-config" \
+    -v "`pwd`/.data:/etc/ckan-cloud/data" \
+    -e CKAN_CLOUD_OPERATOR_SRC=/usr/src/ckan-cloud-operator/ckan_cloud_operator \
+    -e DATA_PATH=/etc/ckan-cloud/data \
+    --entrypoint bash ckan-cloud-operator -c 'source ~/.bashrc;
+ckan-cloud-operator cluster info &&\
+kubectl get nodes
+'
+```
+
 ### scripts
 
 the scripts/ directory contains high-level scripts which can run on Jenkins
@@ -429,9 +453,9 @@ For .py scripts:
 ```
 docker run \
     -v "${CLUSTER_CONFIG_PATH}/.kubeconfig:/etc/ckan-cloud/.kube-config" \
-    -v "${CLUSTER_CONFIG_PATH}/${JOB_NAME}/data:/etc/ckan-cloud/data" \
+    -v "`pwd`/.data:/etc/ckan-cloud/data" \
     -e CKAN_CLOUD_OPERATOR_SRC=/usr/src/ckan-cloud-operator/ckan_cloud_operator \
-    -e DATA_PATH=/etc/ckan-cloud/data \ 
+    -e DATA_PATH=/etc/ckan-cloud/data \
     -e FOO -e BAR \
     --entrypoint bash ckan-cloud-operator -c "source ~/.bashrc; python3 \"/usr/src/ckan-cloud-operator/scripts/${JOB_NAME}.py\""
 ```
@@ -441,11 +465,13 @@ For .sh scripts:
 ```
 docker run \
     -v "${CLUSTER_CONFIG_PATH}/.kubeconfig:/etc/ckan-cloud/.kube-config" \
-    -v "${CLUSTER_CONFIG_PATH}/${JOB_NAME}/data:/etc/ckan-cloud/data" \
+    -v "`pwd`/.data:/etc/ckan-cloud/data" \
     -e CKAN_CLOUD_OPERATOR_SRC=/usr/src/ckan-cloud-operator/ckan_cloud_operator \
     -e DATA_PATH=/etc/ckan-cloud/data \
     -e FOO -e BAR \
     --entrypoint bash ckan-cloud-operator -c "source ~/.bashrc; bash \"/usr/src/ckan-cloud-operator/scripts/${JOB_NAME}.sh\""
 ```
 
-Check the script for any output data and add a post build archive artifacts action
+Check the script for any output data and add a post build archive artifacts action:
+
+* files to archive: `.data/**/*`

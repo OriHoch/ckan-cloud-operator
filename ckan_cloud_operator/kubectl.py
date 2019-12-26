@@ -51,7 +51,7 @@ def get(what, *args, required=True, namespace='ckan-cloud', get_cmd='get', **kwa
         )
     except subprocess.CalledProcessError:
         if required:
-            raise
+            logs.exit_catastrophic_failure()
         else:
             return None
 

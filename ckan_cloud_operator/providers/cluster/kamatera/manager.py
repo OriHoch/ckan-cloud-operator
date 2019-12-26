@@ -19,6 +19,7 @@ def _config_interactive_set(default_values, namespace=None, is_secret=False, suf
 
 import subprocess
 import os
+import traceback
 from ckan_cloud_operator import cloudflare
 from ckan_cloud_operator.routers.routes import manager as routes_manager
 from ckan_cloud_operator import kubectl
@@ -63,11 +64,14 @@ def update_nginx_router(router_name, wait_ready, spec, annotations, routes, dry_
     rancher_subdomain = management_secrets['rancher_sub_domain']
     root_domain = management_secrets['RootDomainName']
     route_subdomains = set()
+    external_domains = {}
     for route in routes:
-        assert route['spec']['root-domain'] == root_domain
-        assert route['spec']['sub-domain'] != rancher_subdomain
-        assert route['spec']['sub-domain'] not in route_subdomains
-        route_subdomains.add(route['spec']['sub-domain'])
+        if route['spec']['root-domain'] == root_domain:
+            assert route['spec']['sub-domain'] != rancher_subdomain
+            assert route['spec']['sub-domain'] not in route_subdomains
+            route_subdomains.add(route['spec']['sub-domain'])
+        else:
+            external_domains.setdefault(route['spec']['root-domain'], set()).add(route['spec']['sub-domain'])
     print('Updating Cloudflare A Records')
     for subdomain in route_subdomains:
         cloudflare.update_a_record(
@@ -82,51 +86,85 @@ def update_nginx_router(router_name, wait_ready, spec, annotations, routes, dry_
                            '--webroot',
                            '-w', '/var/lib/letsencrypt/',
                            '-d', ','.join([f'{s}.{root_domain}' for s in [rancher_subdomain, *route_subdomains]]))
+    for external_root_domain, external_sub_domains in external_domains.items():
+        if ssh_management_machine('ls', f"/etc/nginx/snippets/letsencrypt_certs-{external_root_domain}.conf") != 0:
+            ssh_management_machine(
+                f"ssl_certificate /etc/letsencrypt/live/{external_root_domain}/fullchain.pem;",
+                f"ssl_certificate_key /etc/letsencrypt/live/{external_root_domain}/privkey.pem;",
+                f"ssl_trusted_certificate /etc/letsencrypt/live/{external_root_domain}/chain.pem;",
+                scp_to_remote_file=f"/etc/nginx/snippets/letsencrypt_certs-{external_root_domain}.conf"
+            )
+        print('Registering certificates for external root domain ' + external_root_domain)
+        print('subdomains = {}'.format(external_sub_domains))
+        print('Make sure DNS is configured properly before adding the route!')
+        try:
+            ssh_management_machine('certbot', 'certonly',
+                                   '--agree-tos', '--email', management_secrets['CloudflareEmail'],
+                                   '--webroot',
+                                   '-w', '/var/lib/letsencrypt/',
+                                   '--cert-name', external_root_domain,
+                                   '-d', ','.join([f'{s}.{external_root_domain}' for s in external_sub_domains]))
+        except Exception:
+            traceback.print_exc()
+            print('Error registering SSL certificate for external root domain ' + external_root_domain)
     for route in routes:
-        if route['spec']['sub-domain'] in route_subdomains:
-            backend_url = routes_manager.get_backend_url(route)
-            ssh_management_machine(
-                "location / {",
-                    f'proxy_pass {backend_url};',
-                    "include snippets/http2_proxy.conf;",
-                "}",
-                scp_to_remote_file=f'/etc/nginx/snippets/{route["spec"]["sub-domain"]}.conf'
-            )
-            client_max_body_size = route['spec'].get('client-max-body-size')
-            client_max_body_size = f"client_max_body_size {client_max_body_size};" if client_max_body_size else ""
-            ssh_management_machine(
-                "map $http_upgrade $connection_upgrade {",
-                    "default Upgrade;",
-                    '""      close;',
-                "}",
-                "server {",
-                    "listen 80;",
-                    "listen    [::]:80;",
-                    f"server_name {route['spec']['sub-domain']}.{root_domain};",
-                    "include snippets/letsencrypt.conf;",
-                    "return 301 https://$host$request_uri;",
-                "}",
-                "server {",
-                    client_max_body_size,
-                    "listen 443 ssl http2;",
-                    "listen [::]:443 ssl http2;",
-                    f"server_name {route['spec']['sub-domain']}.{root_domain};",
-                    "include snippets/letsencrypt_certs.conf;",
-                    "include snippets/ssl.conf;",
-                    "include snippets/letsencrypt.conf;",
-                    f"include snippets/{route['spec']['sub-domain']}.conf;",
-                "}",
-                scp_to_remote_file=f'/etc/nginx/sites-enabled/{route["spec"]["sub-domain"]}'
-            )
+        if route['spec']['root-domain'] == root_domain:
+            snippet_name = route["spec"]["sub-domain"]
+            letsencrypt_certs = 'letsencrypt_certs.conf'
+        else:
+            snippet_name = '{}.{}'.format(route["spec"]["sub-domain"], route['spec']['root-domain'])
+            letsencrypt_certs = 'letsencrypt_certs-{}.conf'.format(route['spec']['root-domain'])
+        backend_url = routes_manager.get_backend_url(route).strip()
+        if not backend_url.startswith('http'):
+            backend_url = 'http://' + backend_url
+        ssh_management_machine(
+            "location / {",
+                f"proxy_pass {backend_url};",
+                "include snippets/http2_proxy.conf;",
+            "}",
+            scp_to_remote_file=f'/etc/nginx/snippets/{snippet_name}.conf'
+        )
+        client_max_body_size = route['spec'].get('client-max-body-size')
+        client_max_body_size = f"client_max_body_size {client_max_body_size};" if client_max_body_size else ""
+        ssh_management_machine(
+            "map $http_upgrade $connection_upgrade {",
+                "default Upgrade;",
+                '""      close;',
+            "}",
+            "server {",
+                "listen 80;",
+                "listen    [::]:80;",
+                f"server_name {route['spec']['sub-domain']}.{route['spec']['root-domain']};",
+                "include snippets/letsencrypt.conf;",
+                "return 301 https://$host$request_uri;",
+            "}",
+            "server {",
+                client_max_body_size,
+                "listen 443 ssl http2;",
+                "listen [::]:443 ssl http2;",
+                f"server_name {route['spec']['sub-domain']}.{route['spec']['root-domain']};",
+                f"include snippets/{letsencrypt_certs};",
+                "include snippets/ssl.conf;",
+                "include snippets/letsencrypt.conf;",
+                f"include snippets/{snippet_name}.conf;",
+            "}",
+            scp_to_remote_file=f'/etc/nginx/sites-enabled/{snippet_name}'
+        )
     ssh_management_machine('systemctl reload nginx')
 
 
 def rancher(*args, context='Default', check_output=False):
     management_secrets = get_management_machine_secrets()
+    default_rancher_context_id = _config_get('default-rancher-context-id', is_secret=True)
+    if not default_rancher_context_id:
+        print('Please set the ID of the Default context in Rancher')
+        print('e.g. c-fghij:p-abcde')
+        _config_interactive_set({'default-rancher-context-id': None}, is_secret=True)
+        default_rancher_context_id = _config_get('default-rancher-context-id', is_secret=True)
     output = None
     try:
         output = subprocess.check_output(' '.join([
-            'rancher', 'login',
+            'rancher', 'login', '--context', default_rancher_context_id,
             '--token', management_secrets['rancher_bearer_token'],
             management_secrets['rancher_endpoint']
         ]) + ' 2>&1', shell=True)
@@ -170,8 +208,10 @@ def get_management_public_ip():
     return management_manager.get_management_public_ip()
 
 
-def get_nodeport_url(service_name):
-    service = kubectl.get('service', service_name, namespace='default')
+def get_nodeport_url(service_name, namespace):
+    if not namespace:
+        namespace = 'default'
+    service = kubectl.get('service', service_name, namespace=namespace)
     node_port = service['spec']['ports'][0]['nodePort']
     node_name = kubectl.get('nodes')['items'][0]['metadata']['name']
     output = rancher('ssh', node_name, 'ifconfig', 'eth1', check_output=True).decode()

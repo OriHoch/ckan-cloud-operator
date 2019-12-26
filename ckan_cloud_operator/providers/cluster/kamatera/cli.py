@@ -69,5 +69,6 @@ def management_public_ip():
 
 @kamatera.command()
 @click.argument('SERVICE_NAME')
-def nodeport_url(service_name):
-    print(manager.get_nodeport_url(service_name=service_name))
+@click.option('--namespace')
+def nodeport_url(service_name, namespace):
+    print(manager.get_nodeport_url(service_name=service_name, namespace=namespace))

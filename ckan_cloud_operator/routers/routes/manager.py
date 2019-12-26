@@ -41,7 +41,7 @@ def get_name(route):
 
 
 def get_backend_url(route):
-    return get_module(route).get_backend_url(route)
+    return get_module(route).get_backend_url(route).strip()
 
 
 def get_frontend_hostname(route):
