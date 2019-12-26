@@ -23,7 +23,6 @@ def get_kube_items(operator, what, spec_fields=None, metadata_fields=None, statu
         }
 
 
-
 def cluster_info(operator):
     output = subprocess.check_output(f'{operator} cluster info', shell=True)
     yield from (cluster for cluster in yaml.load(output))
@@ -126,12 +125,13 @@ def ckan_cloud_instances(operator):
 
 
 def main_flow(prefix, operator):
+
     return Flow(
         cluster_info(operator),
         update_resource(['res_1'], name='cluster-info', path='cluster-info.csv'),
         checkpoint(f'{prefix}-cluster-info'),
-        ckan_cloud_instances(operator),
-        update_resource(['res_2'], name='ckan-cloud-instances', path='ckan-cloud-instances.csv'),
+        # ckan_cloud_instances(operator),
+        # update_resource(['res_2'], name='ckan-cloud-instances', path='ckan-cloud-instances.csv'),
     )
 
 

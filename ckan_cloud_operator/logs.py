@@ -60,13 +60,23 @@ def exit_catastrophic_failure(exitcode=1, quiet=False):
         critical('Catastrophic Failure!')
     exit(exitcode)
 
+
 # subprocess
 
-def log_subprocess_output(stdout, stderr):
-    for line in stderr.decode('utf8').split('\n'):
+
+def log_subprocess_output(stdout, stderr, kw):
+    def _decode_lines(s):
+        if s:
+            if kw.get('shell'):
+                return s.split('\n')
+            else:
+                return s.decode('utf8').split('\n')
+        else:
+            return []
+    for line in _decode_lines(stderr):
         if line:
             warning(line)
-    for line in stdout.decode('utf8').split('\n'):
+    for line in _decode_lines(stdout):
         if line:
             info(line)
 
@@ -76,21 +86,26 @@ def subprocess_run(command, input=None):
         command, input=input, 
         shell=True, check=True, capture_output=True
     )
-    log_subprocess_output(completed.stdout, completed.stderr)
+    log_subprocess_output(completed.stdout, completed.stderr, {'shell': True})
+
 
 def subprocess_check_output(*args, **kw):
     try:
         return subprocess.check_output(*args, stderr=subprocess.PIPE, **kw)
     except subprocess.CalledProcessError as e:
-        log_subprocess_output(e.stdout, e.stderr)
+        log_subprocess_output(e.stdout, e.stderr, kw)
         raise
+
 
 def subprocess_check_call(*args, **kw):
     try:
+        print(args)
+        print(kw)
         return subprocess.check_call(*args, stderr=subprocess.PIPE, stdout=subprocess.PIPE, **kw)
     except subprocess.CalledProcessError as e:
-        log_subprocess_output(e.stdout, e.stderr)
+        log_subprocess_output(e.stdout, e.stderr, kw)
         raise
+
 
 # yaml dumping
 

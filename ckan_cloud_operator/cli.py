@@ -79,7 +79,7 @@ drivers.add_command(driver_helm_cli.helm)
 @click.argument('ARG', nargs=-1)
 def kubectl_command(arg):
     from ckan_cloud_operator import kubectl
-    kubectl.check_call(' '.join(arg))
+    exit(kubectl.call(' '.join(arg)))
 
 
 @main.command()
