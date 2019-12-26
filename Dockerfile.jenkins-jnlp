@@ -2,13 +2,16 @@ FROM jenkins/jnlp-slave
 
 USER root
 COPY docker-build.sh /usr/src/ckan-cloud-operator/
+ARG RANCHER_CLI_VERSION=v2.3.2
 RUN /usr/src/ckan-cloud-operator/docker-build.sh
+RUN chown jenkins:jenkins /home/jenkins
 
 USER jenkins
 ENV PATH=/home/jenkins/miniconda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 COPY environment.yaml ./environment.yaml
-RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh &&\
-    bash ~/miniconda.sh -b -p $HOME/miniconda && conda update --prefix $HOME/miniconda conda &&\
+RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /home/jenkins/miniconda.sh &&\
+    bash /home/jenkins/miniconda.sh -b -p $HOME/miniconda &&\
+    conda update --prefix $HOME/miniconda conda &&\
     conda env create -f ./environment.yaml &&\
     conda clean -ya
 COPY ckan_cloud_operator ./ckan-cloud-operator/ckan_cloud_operator
@@ -17,7 +20,7 @@ COPY scripts /usr/src/ckan-cloud-operator/scripts
 ENV CKAN_CLOUD_OPERATOR_SCRIPTS=/usr/src/ckan-cloud-operator/scripts
 
 USER root
-ARG CKAN_CLOUD_OPERATOR_IMAGE_TAG
+ARG CKAN_CLOUD_OPERATOR_IMAGE_TAG=latest
 RUN echo "${CKAN_CLOUD_OPERATOR_IMAGE_TAG}" > /etc/CKAN_CLOUD_OPERATOR_IMAGE_TAG
 RUN chown -R jenkins:jenkins /home/jenkins/ckan-cloud-operator &&\
     chown jenkins:jenkins /etc/CKAN_CLOUD_OPERATOR_IMAGE_TAG &&\
