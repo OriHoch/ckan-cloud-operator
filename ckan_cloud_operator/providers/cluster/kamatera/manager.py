@@ -83,7 +83,7 @@ def update_nginx_router(router_name, wait_ready, spec, annotations, routes, dry_
     print('Registering certificates')
     ssh_management_machine('certbot', 'certonly',
                            '--agree-tos', '--email', management_secrets['CloudflareEmail'],
-                           '--webroot',
+                           '--webroot', '--expand', '-n',
                            '-w', '/var/lib/letsencrypt/',
                            '-d', ','.join([f'{s}.{root_domain}' for s in [rancher_subdomain, *route_subdomains]]))
     for external_root_domain, external_sub_domains in external_domains.items():
@@ -100,7 +100,7 @@ def update_nginx_router(router_name, wait_ready, spec, annotations, routes, dry_
         try:
             ssh_management_machine('certbot', 'certonly',
                                    '--agree-tos', '--email', management_secrets['CloudflareEmail'],
-                                   '--webroot',
+                                   '--webroot', '--expand', '-n',
                                    '-w', '/var/lib/letsencrypt/',
                                    '--cert-name', external_root_domain,
                                    '-d', ','.join([f'{s}.{external_root_domain}' for s in external_sub_domains]))
