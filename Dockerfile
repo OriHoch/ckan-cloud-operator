@@ -6,7 +6,7 @@ COPY environment.yaml /environment.yaml
 COPY bashrc.inc /root/bashrc.inc
 RUN conda env create -f /environment.yaml
 ARG RANCHER_CLI_VERSION=v2.3.2
-RUN curl https://releases.rancher.com/cli2/${RANCHER_CLI_VERSION}/rancher-linux-amd64-${RANCHER_CLI_VERSION}.tar.gz -o rancher-linux-amd64-${RANCHER_CLI_VERSION}.tar.gz &&\
+RUN wget -q https://releases.rancher.com/cli2/${RANCHER_CLI_VERSION}/rancher-linux-amd64-${RANCHER_CLI_VERSION}.tar.gz &&\
     tar -xzvf rancher-linux-amd64-${RANCHER_CLI_VERSION}.tar.gz &&\
     mv ./rancher-${RANCHER_CLI_VERSION}/rancher /usr/local/bin && rancher --version
 RUN cat /root/bashrc.inc >> ~/.bashrc
