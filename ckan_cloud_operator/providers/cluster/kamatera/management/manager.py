@@ -66,6 +66,7 @@ def create_management_server(interactive, values):
         print(values)
     else:
         assert interactive
+    subprocess.check_call(['which', 'cloudcli'])
     rundata = _rundata_init('create_management_server')
     if not rundata.get('entered_credentials'):
         if interactive:
@@ -85,12 +86,6 @@ def create_management_server(interactive, values):
             rundata['apiSecret'] = values['apiSecret']
         assert rundata['apiServer'] and rundata['apiClientid'] and rundata['apiSecret']
         rundata['entered_credentials'] = True
-        print(_rundata_save(rundata))
-    if not rundata.get('downloaded_cloudcli'):
-        print('Downloaidng cloudcli')
-        subprocess.check_call('curl https://cloudcli.cloudwm.com/binaries/latest/cloudcli-linux-amd64.tar.gz -o cloudcli-linux-amd64.tar.gz', shell=True)
-        subprocess.check_call('tar -xzvf cloudcli-linux-amd64.tar.gz', shell=True)
-        rundata['downloaded_cloudcli'] = True
         print(_rundata_save(rundata))
     if not rundata.get('entered_domain_name'):
         if interactive:
@@ -154,7 +149,7 @@ def create_management_server(interactive, values):
         clientid=rundata['apiClientid'], secret=rundata['apiSecret'], server=rundata['apiServer'], )
     if not rundata.get('server_created'):
         print('Creating server...')
-        subprocess.check_call('./cloudcli init {cloudcli_connection_args} && ./cloudcli server create --wait {cloudcli_connection_args} --name {name} --datacenter {datacenter} --image {image} --cpu {cpu} --ram {ram} --disk {disk} --network name=wan --network name={networkname} --password {password}'.format(
+        subprocess.check_call('cloudcli init {cloudcli_connection_args} && cloudcli server create --wait {cloudcli_connection_args} --name {name} --datacenter {datacenter} --image {image} --cpu {cpu} --ram {ram} --disk {disk} --network name=wan --network name={networkname} --password {password}'.format(
             cloudcli_connection_args=cloudcli_connection_args,
             name=rundata['entered_server_name'],
             datacenter=rundata[datacenter_param_label],
@@ -168,7 +163,7 @@ def create_management_server(interactive, values):
         rundata['server_created'] = True
         print(_rundata_save(rundata))
     if not rundata.get('server_public_ip'):
-        rundata['server_info'] = json.loads(subprocess.check_output('./cloudcli server info {cloudcli_connection_args} --name {name} --format json'.format(
+        rundata['server_info'] = json.loads(subprocess.check_output('cloudcli server info {cloudcli_connection_args} --name {name} --format json'.format(
             cloudcli_connection_args=cloudcli_connection_args,
             name=rundata['entered_server_name']
         ), shell=True))
@@ -184,7 +179,7 @@ def create_management_server(interactive, values):
         rundata['ssh_key'] = '.rundata/management_server_id_rsa'
         print(_rundata_save(rundata))
     if not rundata.get('set_ssh_key_on_server'):
-        subprocess.check_call('./cloudcli server sshkey {cloudcli_connection_args} --name {name} --password {password} --public-key {public_key}'.format(
+        subprocess.check_call('cloudcli server sshkey {cloudcli_connection_args} --name {name} --password {password} --public-key {public_key}'.format(
             cloudcli_connection_args=cloudcli_connection_args,
             name=rundata['entered_server_name'],
             public_key='.rundata/management_server_id_rsa.pub',

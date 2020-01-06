@@ -1,12 +1,41 @@
 FROM python:3.7-alpine
 RUN wget -qO /usr/local/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/$(wget -qO - https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl &&\
-    chmod +x /usr/local/bin/kubectl
-RUN apk --update add bash jq &&\
+    chmod +x /usr/local/bin/kubectl &&\
+    apk --update add bash jq &&\
     apk add --virtual build-deps gcc python-dev musl-dev &&\
-    apk add postgresql-dev
+    apk add postgresql-dev curl &&\
+    python3 -m pip install psycopg2 pyyaml kubernetes click toml requests
+RUN curl https://cloudcli.cloudwm.com/binaries/latest/cloudcli-linux-amd64.tar.gz -o cloudcli-linux-amd64.tar.gz &&\
+    tar -xzvf cloudcli-linux-amd64.tar.gz && mv cloudcli /usr/local/bin/
+RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache openssh
+RUN python3 -m pip install Click==7.0 \
+    colorama==0.4.1 \
+    coverage==5.0.2 \
+    docutils==0.15.2 \
+    google-auth==1.10.0 \
+    httpagentparser==1.9.0 \
+    idna==2.8 \
+    jmespath==0.9.4 \
+    kubernetes==10.0.1 \
+    oauthlib==3.1.0 \
+    psycopg2==2.8.4 \
+    pyasn1==0.4.8 \
+    pyasn1-modules==0.2.7 \
+    python-dateutil==2.8.1 \
+    PyYAML==5.2 \
+    requests==2.21.0 \
+    requests-oauthlib==1.3.0 \
+    rsa==3.4.2 \
+    ruamel.yaml==0.16.5 \
+    ruamel.yaml.clib==0.2.0 \
+    s3transfer==0.2.1 \
+    six==1.13.0 \
+    toml==0.10.0 \
+    urllib3==1.24.3 \
+    websocket-client==0.57.0
 COPY ckan_cloud_operator /usr/src/ckan-cloud-operator/ckan_cloud_operator
 COPY *.sh *.py /usr/src/ckan-cloud-operator/
-RUN python3 -m pip install psycopg2 pyyaml kubernetes click toml requests
 RUN python3 -m pip install -e /usr/src/ckan-cloud-operator
 ENTRYPOINT ["ckan-cloud-operator"]
 

@@ -40,7 +40,7 @@ check_configmap() {
     NAMESPACES=$(kubectl get -n ckan-cloud configmaps)
     if [[ $NAMESPACES != *"operator-conf"* ]]
     then
-        kubectl create -n ckan-cloud configmap operator-conf --from-literal=ckan-cloud-operator-image=orihoch/ckan-cloud-operator:latest --from-literal=label-prefix=ckan-cloud
+        kubectl create -n ckan-cloud configmap operator-conf --from-literal=ckan-cloud-operator-image=uumpa/ckan-cloud-operator:latest --from-literal=label-prefix=ckan-cloud
     fi
 }
 
@@ -48,8 +48,8 @@ check_configmap() {
 
 if [ "${1}" == "pull" ]; then
     if [ "${2}" == "latest" ]; then
-        docker pull orihoch/ckan-cloud-operator:latest >/dev/stderr &&\
-        docker tag orihoch/ckan-cloud-operator:latest ckan-cloud-operator &&\
+        docker pull uumpa/ckan-cloud-operator:latest >/dev/stderr &&\
+        docker tag uumpa/ckan-cloud-operator:latest ckan-cloud-operator &&\
         exit 0
     elif [ "${2}" != "" ]; then
         IMAGE=$(kubectl -n ckan-cloud get configmap operator-conf -o jsonpath={.data.ckan-cloud-operator-image})

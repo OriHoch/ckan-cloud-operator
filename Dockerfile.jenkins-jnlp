@@ -32,4 +32,5 @@ RUN bash -c "source miniconda/etc/profile.d/conda.sh && conda activate ckan-clou
 ENV PATH=/home/jenkins/miniconda/envs/ckan-cloud-operator/bin:/home/jenkins/miniconda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ENV CKAN_CLOUD_OPERATOR_USE_PROXY=n
 WORKDIR /home/jenkins
+ENV HOME=/home/jenkins/agent
 ENTRYPOINT ["./ckan-cloud-operator/entrypoint-jnlp.sh"]

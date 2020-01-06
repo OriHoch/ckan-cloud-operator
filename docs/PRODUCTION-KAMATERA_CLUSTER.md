@@ -17,7 +17,8 @@ We will use the Cloudflare API to set subdomains and register SSL for this domai
 ## Prerequisites
 
 * Docker - https://docs.docker.com/get-started/
-* Kamatera Cloud account - https://console.kamatera.com/create 
+* Kamatera Cloud account - https://console.kamatera.com/create
+* 1-2 hours 
 
 ## Create a private network
 
@@ -40,7 +41,7 @@ The components can be separated later to different servers if needed.
 Pull the Docker image to create the server:
 
 ```
-CKAN_CLOUD_OPERATOR_MINIMAL_IMAGE="orihoch/ckan-cloud-operator-minimal@sha256:b6ce7590006b6fe7eae8d5914c5e1f2fae91f9fdcb83a2af56b43bd6ff37faf4"
+CKAN_CLOUD_OPERATOR_MINIMAL_IMAGE="uumpa/ckan-cloud-operator-minimal:bd9db3753d168284330646e0259002ac93293eaa"
 docker pull "${CKAN_CLOUD_OPERATOR_MINIMAL_IMAGE}"
 docker tag "${CKAN_CLOUD_OPERATOR_MINIMAL_IMAGE}" ckan-cloud-operator-minimal
 ```
@@ -52,7 +53,7 @@ follow the instructions on the terminal,
 the whole process takes ~15 minutes:
 
 ```
-docker run -it ckan-cloud-operator-minimal cluster kamatera create-management-server --interactive
+docker run -it -v `pwd`/.rundata:/.rundata ckan-cloud-operator-minimal cluster kamatera create-management-server --interactive
 ```
 
 Store the output of the terminal session securely, it contains all required secrets and installation details which is useful for debugging and recovery.
@@ -125,7 +126,7 @@ ckan-cloud-operator cluster info
 Initialize the cluster:
 
 ```
-ckan-cloud-operator cluster initialize --interactive --cluster-provider kamatera --operator-image orihoch/ckan-cloud-operator:latest
+ckan-cloud-operator cluster initialize --interactive --cluster-provider kamatera --operator-image uumpa/ckan-cloud-operator:latest
 ```
 
 Start a bash shell to run commands from an operator environment:
@@ -334,10 +335,10 @@ ckan-cloud-operator cluster kamatera ssh-management-machine -- apt-get install o
 
 From Jenkins web UI > Nodes > Add New Node:
 
-* Node name: `management`
+* Node name: `docker`
 * Permanent Agent
 * Remote root directory: `/var/jenkins_agent`
-* Labels: `management`
+* Labels: `docker`
 * Only build jobs matching label expression
 * Launch agent via SSH - 
   * host: the Rancher domain
@@ -348,7 +349,87 @@ Nodes > Master > Configure:
 
   * Usage: Only build jobs matching label expression
 
-Set an environment variable with a config path for the cluster:
+Manage Jenkins > Configure Global Security
+
+* Agent port = set to a random 5 digit port number
+
+Using Rancher - add a service:
+
+* name: `jenkins-jnlp-master`
+* Resolves to: One or more workloads
+* Add Target Workload: `jenkins`
+* Advanced Options:
+  * As a: `NodePort`
+  * Add Port: name: `jnlp`, service port: `AGENT_PORT_NUM`, target port: `AGENT_PORT_NUM`, node port: `AGENT_PORT_NUM`
+
+see [Jenkins docs](../docs/JENKINS.md) to deploy a jnlp node to run ckan-cloud-operator jobs
+
+## Create a Docker build job
+
+An example job which can be used as-is or modified for custom Docker builds
+
+Jenkins > New Item:
+
+* Name: `docker-build`
+* Freestyle project
+* Restrict where this project can be run: `docker`
+* This project is parameterized, add the following string parameters:
+  * `GIT_REPOSITORY_URL` = `https://github.com/OriHoch/ckan-cloud-operator.git`
+  * `GIT_BRANCH_SPECIFIER` = `*/master`
+  * `DOCKER_IMAGE_NAME` = `my-ckan-cloud-operator-image`
+  * `BUILD_ARGS` = `--build-arg=foo=bar`
+* Source Code Management:
+  * Git
+  * Repository URL: `$GIT_REPOSITORY_URL`
+  * Branches: `$GIT_BRANCH_SPECIFIER`
+* Use secret text(s) or file(s):
+  * Secret text
+  * Variable: `DOCKER_REGISTRY_SECRETS`
+  * Credentials: Add secret text with the following contents:
+```
+DOCKER_PASSWORD=
+DOCKER_USERNAME=
+DOCKER_REPO=
+``` 
+* Execute Shell:
+```
+#!/usr/bin/env bash
+
+docker_build() {
+	echo == build ${1}
+    docker build -t "${1}" $2 && echo OK    
+}
+
+docker_push() {
+	echo == push "${1}" '>' "${2}"
+	docker tag "${1}" "${2}" && docker push "${2}" && echo OK
+}
+
+eval "${DOCKER_REGISTRY_SECRETS}"
+echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin &&\
+docker_build "${DOCKER_IMAGE_NAME}" "$BUILD_ARGS ." &&\
+docker_push "${DOCKER_IMAGE_NAME}" $DOCKER_REPO/$DOCKER_IMAGE_NAME &&\
+docker_push "${DOCKER_IMAGE_NAME}" $DOCKER_REPO/$DOCKER_IMAGE_NAME:$GIT_COMMIT &&\
+echo &&\
+echo Latest images: &&\
+echo $DOCKER_REPO/$DOCKER_IMAGE_NAME &&\
+echo DOCKER_REPO/$DOCKER_IMAGE_NAME:$GIT_COMMIT
+```
+
+## Add a route with an external domain
+
+Register the DNS to point to the management server public IP
+
+Add the route:
+
+```
+ckan-cloud-operator routers create-backend-url-subdomain-route infra-1 ROUTE_NAME `ckan-cloud-operator cluster kamatera nodeport-url SERVICE_NAME --namespace SERVICE_NAMESPACE` SUB_DOMAIN EXTERNAL_ROOT_DOMAIN
+```
+
+
+## Allow to run ckan-cloud-operator on the management server
+
+Set an environment variable with a config path on the management server which will be used for cluster configurations:
 
 ```
 export CLUSTER_CONFIG_PATH=/etc/my-cluster-id
@@ -370,108 +451,53 @@ ckan-cloud-operator cluster kamatera ssh-management-machine -- ckan-cloud-operat
 ckan-cloud-operator cluster kamatera ssh-management-machine -- ckan-cloud-operator-env add default $CLUSTER_CONFIG_PATH/.kubeconfig ckan-cloud-operator
 ```
 
-## Add a route with an external domain
+## Integrate with Kamatera Cloud Storage
 
-Register the DNS to point to the management server public IP
+From Kamatera web UI: create a file server organization and add a user
 
-Add the route:
-
-```
-ckan-cloud-operator routers create-backend-url-subdomain-route infra-1 ROUTE_NAME `ckan-cloud-operator cluster kamatera nodeport-url SERVICE_NAME --namespace SERVICE_NAMESPACE` SUB_DOMAIN EXTERNAL_ROOT_DOMAIN
-```
-
-## Create Jenkins Jobs
-
-### ckan-cloud-operator-build
-
-This job update the ckan-cloud-operator image which is used locally form the management server
-
-* Restrict where this project can run: Label Expression: `management`
-* Source code management: `git`
-* Repository URL: `https://github.com/OriHoch/ckan-cloud-operator.git`
-* Execute shell: `docker build -t ckan-cloud-operator .`
-
-### build app
-
-An example job to build and push an app to the private registry
-
-* Restrict where this project can run: Label Expression: `management`
-* Source code management: `git`
-* Repository URL: `repository URL of the app to deploy` 
-* Use secret text or file: add binding: secret text
-  * Variable: `DOCKER_REGISTRY_SECRETS`
-  * Specific Credentials: Add a Secret text, description: `docker-registry-secrets` with the following secret:
-```
-export DOCKER_DOMAIN=(The domain name to the docker registry, e.g. docker-registry.my-domain.com)
-export DOCKER_USERNAME=(Docker registry username)
-export DOCKER_PASSWORD=(Docker registry password)
-```
-* Execute shell:
+Set the Kamatera storage user and password in environment variables:
 
 ```
-#!/usr/bin/env bash
-eval "${DOCKER_REGISTRY_SECRETS}"
-echo $DOCKER_PASSWORD | docker login --password-stdin --username $DOCKER_USERNAME $DOCKER_DOMAIN
+export KAMATERA_STORAGE_USER=
+export KAMATERA_STORAGE_PASSWORD=
 ```
 
-### Run ckan-cloud-operator commands
-
-Add the CLUSTER_CONFIG_PATH you set previously as a Jenkins global env var:
-
-* Jenkins > Manage Jenkins > System > add global environment variable
-  * `CLUSTER_CONFIG_PATH` = `/etc/my-cluster-id`
-
-Add a job:
+Install dependencies and mount (it will ask for the Kamatera storage username and password):
 
 ```
-docker run \
-    -v "${CLUSTER_CONFIG_PATH}/.kubeconfig:/etc/ckan-cloud/.kube-config" \
-    -v "`pwd`/.data:/etc/ckan-cloud/data" \
-    -e CKAN_CLOUD_OPERATOR_SRC=/usr/src/ckan-cloud-operator/ckan_cloud_operator \
-    -e DATA_PATH=/etc/ckan-cloud/data \
-    --entrypoint bash ckan-cloud-operator -c 'source ~/.bashrc;
-ckan-cloud-operator cluster info &&\
-kubectl get nodes
-'
+ckan-cloud-operator cluster kamatera ssh-management-machine "
+apt-get install -y davfs2 &&\
+echo https://cloudwm-fs.com/remote.php/webdav/ $KAMATERA_STORAGE_USER $KAMATERA_STORAGE_PASSWORD > /etc/davfs2/secrets &&\
+mkdir -p /owncloud &&\
+if ! cat /etc/fstab | grep cloudwm-fs; then
+    echo https://cloudwm-fs.com/remote.php/webdav/ /owncloud davfs user,rw,auto 0 0 >> /etc/fstab
+fi &&\
+mount /owncloud
+"
 ```
 
-### scripts
+## Install restic for backups
 
-the scripts/ directory contains high-level scripts which can run on Jenkins
-
-Create a job for each script:
-
-* Name: same as script name (without extension)
-* Restrict to run on: `management`
-* Check script source for args and define in job parameters
-* Execute shell:
-
-(Replace the FOO/BAR env vars with the actual arg names defined in the script / job parameters)
-
-For .py scripts:
+Set a password for restic (backups are encrypted with it!)
 
 ```
-docker run \
-    -v "${CLUSTER_CONFIG_PATH}/.kubeconfig:/etc/ckan-cloud/.kube-config" \
-    -v "`pwd`/.data:/etc/ckan-cloud/data" \
-    -e CKAN_CLOUD_OPERATOR_SRC=/usr/src/ckan-cloud-operator/ckan_cloud_operator \
-    -e DATA_PATH=/etc/ckan-cloud/data \
-    -e FOO -e BAR \
-    --entrypoint bash ckan-cloud-operator -c "source ~/.bashrc; python3 \"/usr/src/ckan-cloud-operator/scripts/${JOB_NAME}.py\""
+export RESTIC_PASSWORD=
+export RESTIC_REPO=/owncloud/my-cluster/restic-repo
 ```
 
-For .sh scripts:
+Install Restic and create a repo:
 
 ```
-docker run \
-    -v "${CLUSTER_CONFIG_PATH}/.kubeconfig:/etc/ckan-cloud/.kube-config" \
-    -v "`pwd`/.data:/etc/ckan-cloud/data" \
-    -e CKAN_CLOUD_OPERATOR_SRC=/usr/src/ckan-cloud-operator/ckan_cloud_operator \
-    -e DATA_PATH=/etc/ckan-cloud/data \
-    -e FOO -e BAR \
-    --entrypoint bash ckan-cloud-operator -c "source ~/.bashrc; bash \"/usr/src/ckan-cloud-operator/scripts/${JOB_NAME}.sh\""
+ckan-cloud-operator cluster kamatera ssh-management-machine "
+apt-get install -y restic &&\
+RESTIC_PASSWORD=$RESTIC_PASSWORD restic init --repo $RESTIC_REPO
+"
 ```
 
-Check the script for any output data and add a post build archive artifacts action:
+Make a backup of the NFS directory:
 
-* files to archive: `.data/**/*`
+```
+ckan-cloud-operator cluster kamatera ssh-management-machine "
+RESTIC_PASSWORD=$RESTIC_PASSWORD restic -r $RESTIC_REPO backup /srv/default
+"
+```
