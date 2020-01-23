@@ -1,32 +1,31 @@
 FROM jenkins/jnlp-slave
 
-USER root
-COPY docker-build.sh /usr/src/ckan-cloud-operator/
-RUN /usr/src/ckan-cloud-operator/docker-build.sh
-
-USER jenkins
-ENV PATH=/home/jenkins/miniconda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-COPY environment.yaml ./environment.yaml
-RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh &&\
-    bash ~/miniconda.sh -b -p $HOME/miniconda && conda update --prefix $HOME/miniconda conda &&\
-    conda env create -f ./environment.yaml &&\
-    conda clean -ya
-COPY ckan_cloud_operator ./ckan-cloud-operator/ckan_cloud_operator
-COPY *.sh *.py ./ckan-cloud-operator/
-COPY scripts /usr/src/ckan-cloud-operator/scripts
-ENV CKAN_CLOUD_OPERATOR_SCRIPTS=/usr/src/ckan-cloud-operator/scripts
+WORKDIR /cco
 
 USER root
-ARG CKAN_CLOUD_OPERATOR_IMAGE_TAG
-RUN echo "${CKAN_CLOUD_OPERATOR_IMAGE_TAG}" > /etc/CKAN_CLOUD_OPERATOR_IMAGE_TAG
-RUN chown -R jenkins:jenkins /home/jenkins/ckan-cloud-operator &&\
-    chown jenkins:jenkins /etc/CKAN_CLOUD_OPERATOR_IMAGE_TAG &&\
-    chmod +x /home/jenkins/ckan-cloud-operator/*.sh
+
+RUN apt-get update &&\
+    apt-get install -y nano curl unzip sudo bash libpq-dev build-essential \
+                       zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev \
+                       libssl-dev libreadline-dev libffi-dev wget software-properties-common
+RUN cd /tmp && wget --progress=dot:giga https://www.python.org/ftp/python/3.7.6/Python-3.7.6.tar.xz &&\
+    tar -xf Python-3.7.6.tar.xz && cd Python-3.7.6 && ./configure --enable-optimizations &&\
+    make -j8 build_all && make -j8 install && ln -s /usr/local/bin/python3.7 /usr/local/bin/python &&\
+    ln -s /usr/local/bin/pip3.7 /usr/local/bin/pip && python --version && pip --version
+
+ENV EDITOR nano
+
+COPY . .
+ARG K8_PROVIDER=aws
+ENV K8_PROVIDER=$K8_PROVIDER
+ARG K8_PROVIDER_CUSTOM_DOWNLOAD_URL=""
+RUN /cco/.travis.sh install-tools
+RUN pip install .
 
 USER jenkins
-RUN bash -c "source miniconda/etc/profile.d/conda.sh && conda activate ckan-cloud-operator &&\
-             cd ckan-cloud-operator && python3 -m pip install -e ."
-ENV PATH=/home/jenkins/miniconda/envs/ckan-cloud-operator/bin:/home/jenkins/miniconda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ENV CKAN_CLOUD_OPERATOR_USE_PROXY=n
-WORKDIR /home/jenkins
-ENTRYPOINT ["./ckan-cloud-operator/entrypoint-jnlp.sh"]
+ENV HOME /home/jenkins/agent
+
+# to run the agent, set the following env vars:
+# JENKINS_AGENT_NAME
+# JENKINS_SECRET
+# JENKINS_URL
